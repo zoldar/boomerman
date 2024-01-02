@@ -1,11 +1,11 @@
 defmodule BoomermanWeb.Router do
   use BoomermanWeb, :router
 
-  pipeline :api do
-    plug :accepts, ["json"]
+  pipeline :browser do
+    plug :accepts, ["html"]
   end
 
-  scope "/api", BoomermanWeb do
-    pipe_through :api
+  scope "/", BoomermanWeb do
+    get "/", PageController, :game
   end
 end
