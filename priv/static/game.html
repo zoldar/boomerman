@@ -169,6 +169,7 @@
 
     const TILE_SIZE = 16;
     const PLAYER_VELOCITY = 48;
+    const POWERUP_VELOCITY = 72;
     const ENEMY_VELOCITY = 24;
     const SLIDE_VELOCITY = 60;
     const UP = new Point(0, -1);
@@ -256,6 +257,10 @@
       'dude_walk_left1': [-1, 5],
       'dude_walk_left2': [-1, 6],
       'dude_walk_left3': [-1, 7],
+      'bomb_powerup': [-1, 8],
+      'blast_powerup': [-1, 9],
+      'speed_powerup': [-1, 10],
+      'surprise_powerup': [-1, 11],
       'bomb_big1': [5, 4],
       'bomb_small1': [5, 5],
       'bomb_big2': [5, 6],
@@ -351,6 +356,7 @@
       position;
       direction;
       velocity = 0;
+      powerups = new HashSet();
       boundingBox;
       hitBox;
       // set by animation loop
@@ -485,9 +491,54 @@
         crates: crates,
         enemies: enemies,
         bombs: new HashSet(),
-        blasts: new HashSet()
+        blasts: new HashSet(),
+        powerups: new HashSet()
       }
     }
+
+    // const powerupTypes = ['bomb', 'blast', 'speed', 'surprise'];
+    const powerupTypes = ['blast', 'speed'];
+
+    class Powerup {
+      type;
+      sprite;
+      position;
+      boundingBox;
+
+      constructor(type, position) {
+        this.type = type;
+        this.sprite = type + '_powerup';
+        this.position = position;
+        this.boundingBox = fullBoundingBox(position);
+      }
+
+      icon() {
+        return new PowerupIcon(this.type);
+      }
+
+      hash() {
+        return this.position.x + '#' + this.position.y;
+      }
+    }
+
+    class PowerupIcon {
+      type;
+      icon;
+
+      constructor(type) {
+        this.type = type;
+        this.icon = type + '_powerup';
+      }
+
+      hash() {
+        return this.type;
+      }
+    }
+
+    const BOMB_POWERUP = new PowerupIcon('bomb');
+    const BLAST_POWERUP = new PowerupIcon('blast');
+    const SPEED_POWERUP = new PowerupIcon('speed');
+    const SURPRISE_POWERUP = new PowerupIcon('surprise');
 
     function setupControls() {
       let linkClicked = false;
@@ -671,6 +722,7 @@
       updateBlasts(game);
 
       let { direction, velocity, position } = player;
+      velocity = velocity > 0 && player.powerups.has(SPEED_POWERUP) ? POWERUP_VELOCITY : velocity;
       player.setPosition(position.add(direction.multiply(velocity * secondsPassed)));
 
       var nonTransparentBombs = new HashSet(bombs.toArray().filter(b => !b.transparent));
@@ -684,6 +736,15 @@
       if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
         game.state = 'lost';
         return;
+      }
+
+      let powerupHits = detectCollisions(player, [game.powerups]);
+
+      if (powerupHits.length > 0) {
+        let hit = powerupHits[0];
+
+        game.player.powerups.add(hit.icon());
+        game.powerups.delete(hit);
       }
 
       let hits = detectCollisions(player, obstacles);
@@ -922,7 +983,7 @@
     function createBlast(game, bomb) {
       let { player, walls, bombs, blasts, crates, enemies } = game;
 
-      let radius = 2;
+      let radius = player.powerups.has(BLAST_POWERUP) ? 4 : 2;
       let blast = new Blast(bomb.position);
 
       if (detectCollisions(player, [[bomb]], 'hitBox').length > 0) {
@@ -955,6 +1016,10 @@
               }
             } else if (hit instanceof StaticTile && hit.sprite == 'C') {
               crates.delete(hit);
+              if (!game.socket && Math.random() > 0.7) {
+                let type = powerupTypes[(Math.floor(Math.random() * powerupTypes.length))];
+                game.powerups.add(new Powerup(type, hit.position));
+              }
               blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
             } else if (hit instanceof Player) {
               game.state = 'lost';
@@ -1053,6 +1118,10 @@
       game.crates.forEach(crate => {
         drawSprite(gameContext, crate.position, crate.sprite);
       })
+
+      game.powerups.forEach(powerup => {
+        drawSprite(gameContext, powerup.position, powerup.sprite);
+      });
 
       game.bombs.forEach(bomb => {
         drawSprite(gameContext, bomb.position, bomb.sprite);
