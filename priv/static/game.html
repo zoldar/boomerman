@@ -52,6 +52,17 @@
     #bg-layer {
       z-index: 1;
     }
+
+    #menu {
+      font-family: courier new, mono;
+      position: fixed;
+      bottom: 0.2rem;
+      right: 0.2rem;
+    }
+
+    #menu a {
+      color: white;
+    }
   </style>
 </head>
 
@@ -62,6 +73,11 @@
     <canvas id="ui-layer" width="320" height="200"></canvas>
     <canvas id="game-layer" width="320" height="200"></canvas>
     <canvas id="bg-layer" width="320" height="200"></canvas>
+  </div>
+  <div id="menu">
+    <a href="?multi">Multiplayer</a>
+
+    <a href="?single">Singleplayer</a>
   </div>
 
   <script>
@@ -279,17 +295,17 @@
     };
 
     let map0 = [
-      "%#############%",
-      "%CGGCGGGGCGGGG%",
-      "%G#G#C#G#G#G#G%",
-      "%GGCGCGPGGGGGC%",
-      "%G#G#C#C#G#G#G%",
-      "%GGGEGGGGCGGGG%",
-      "%G#G#G#G#C#G#G%",
-      "%GGGGGGGCGGGGG%",
-      "%G#G#G#G#G#G#G%",
-      "%GGGCGGGGCCCCE%",
-      "%#############%"
+      "%##################%",
+      "%EGGCGGGGCEGGGGGGGE%",
+      "%G#G#C#G#G#G#GGGGGG%",
+      "%GGCGCGEGGGGGCGGGGG%",
+      "%G#G#C#C#G#G#G%##%G%",
+      "%GGGGGGGGCGGGG%  %G%",
+      "%G#G#G#G#C#G#G%  %G%",
+      "%GGGGGGGCGGGGG%##%G%",
+      "%G#G#G#G#G#G#GGGGGG%",
+      "%EGGCGGGECCCCGGGGGP%",
+      "%##################%"
     ];
 
     let wallSprites = new Set(['#', '%']);
@@ -371,10 +387,9 @@
       bgCanvas = document.getElementById('bg-layer');
       bgContext = bgCanvas.getContext('2d');
 
-      let multiplayer = true;
       let game = { loading: true };
 
-      if (multiplayer) {
+      if (window.location.search == '?multi') {
         const protocol = window.location.protocol == 'http:' ? 'ws:' : 'wss:';
         const host = window.location.host;
         const socketUrl = protocol + "//" + host + "/socket/websocket";
