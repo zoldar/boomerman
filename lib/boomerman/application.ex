@@ -13,6 +13,8 @@ defmodule Boomerman.Application do
       {Phoenix.PubSub, name: Boomerman.PubSub},
       # Start a worker by calling: Boomerman.Worker.start_link(arg)
       # {Boomerman.Worker, arg},
+      {Registry, keys: :duplicate, name: Boomerman.PlayerRegistry},
+      Boomerman.Game,
       # Start to serve requests, typically the last entry
       BoomermanWeb.Endpoint
     ]
