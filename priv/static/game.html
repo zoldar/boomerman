@@ -1052,7 +1052,7 @@
       game.map.forEach((row, y) => {
         row.split('').forEach((sprite, x) => {
           let finalSprite = sprite == 'C' || sprite == 'E' || sprite == 'P' ? 'G' : sprite;
-          drawSprite(bgContext, (new Point(x, y)).multiply(TILE_SIZE), finalSprite);
+          if (finalSprite != ' ') drawSprite(bgContext, (new Point(x, y)).multiply(TILE_SIZE), finalSprite);
         });
       });
     }

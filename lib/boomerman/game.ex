@@ -47,17 +47,17 @@ defmodule Boomerman.Game do
   end
 
   @map_definition [
-    "%#############%",
-    "%PGGCGGGGCGGGG%",
-    "%G#G#C#G#G#G#G%",
-    "%GGCGCGPGGGGGC%",
-    "%G#G#C#C#G#G#G%",
-    "%GGGGGGGGCGGGG%",
-    "%G#G#G#G#C#G#G%",
-    "%GGGGGGGCGGGGG%",
-    "%G#G#G#G#G#G#G%",
-    "%GGGCGGGGCCCCP%",
-    "%#############%"
+    "%##################%",
+    "%PGGCGGGGCGGGGGGGGG%",
+    "%G#G#C#G#G#G#GGGGGG%",
+    "%GGCGCGPGGGGGCGGGGG%",
+    "%G#G#C#C#G#G#G%##%G%",
+    "%GGGGGGGGCGGGG%  %G%",
+    "%G#G#G#G#C#G#G%  %G%",
+    "%GGGGGGGCGGGGG%##%G%",
+    "%G#G#G#G#G#G#GGGGGG%",
+    "%GGGCGGGGCCCCPGGGGG%",
+    "%##################%"
   ]
 
   @map Map.build(@map_definition)
