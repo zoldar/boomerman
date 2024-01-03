@@ -94,7 +94,7 @@
       }
 
       equals(p) {
-        return this.x == p.x && this.y == p.y;
+        return Math.abs(this.x - p.x) < 0.00001 && Math.abs(this.y - p.y) < 0.00001;
       }
 
       hash() {
@@ -376,6 +376,7 @@
 
       if (multiplayer) {
         const socket = new WebSocket("wss://boomerman.fly.dev/socket/websocket");
+        // const socket = new WebSocket("ws://localhost:4000/socket/websocket");
 
         socket.addEventListener("open", (event) => {
           socket.send("register");
@@ -456,6 +457,7 @@
 
       return {
         socket: socket,
+        socketTime: performance.now(),
         state: 'active',
         map: map,
         player: player,
@@ -609,7 +611,7 @@
     function update(game, secondsPassed) {
       let { player, walls, crates, bombs, enemies } = game;
 
-      let oldDirection = DOWN;
+      let oldDirection = player.direction;
       let oldVelocity = player.velocity;
       let oldPosition = player.position;
 
@@ -703,9 +705,13 @@
         }
       }
 
-      if (game.socket && (oldDirection != player.direction || oldVelocity != player.velocity || !oldPosition.equals(player.position))) {
+      if (game.socket && (!oldDirection.equals(player.direction) || oldVelocity != player.velocity || (game.socketTime > 0.05 && !oldPosition.equals(player.position)))) {
         game.socket.send(JSON.stringify(["u", player.direction.x, direction.y, player.velocity, player.position.x, player.position.y]));
+
+        game.socketTime = 0;
       }
+
+      game.socketTime += secondsPassed;
     }
 
     function updateEnemies(game, secondsPassed, obstacles) {
