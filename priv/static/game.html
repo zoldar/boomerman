@@ -371,8 +371,57 @@
       bgCanvas = document.getElementById('bg-layer');
       bgContext = bgCanvas.getContext('2d');
 
-      let game = loadGame(map0);
+      let multiplayer = true;
+      let game = { loading: true };
 
+      if (multiplayer) {
+        const socket = new WebSocket("wss://boomerman.fly.dev/socket/websocket");
+
+        socket.addEventListener("open", (event) => {
+          socket.send("register");
+        });
+
+        socket.addEventListener("message", (event) => {
+          if (event.data == "ping") {
+            socket.send("pong");
+          } else {
+            let message = JSON.parse(event.data);
+
+            if (message.action == 'registered') {
+              let playerPostion = new Point(message.x, message.y).multiply(TILE_SIZE);
+              let otherPlayers = message.players.map(p => new Point(p.x, p.y).multiply(TILE_SIZE));
+
+              game = loadGame(message.map, playerPostion, otherPlayers, socket);
+
+              startGame(game);
+            } else if (!game.loading && message.action == 'player_joined') {
+              game.enemies.add(new Enemy(new Point(message.x, message.y).multiply(TILE_SIZE)));
+            } else if (!game.loading && message.action == 'player_left') {
+              game.enemies.delete(new Enemy(new Point(message.x, message.y).multiply(TILE_SIZE)));
+            } else if (!game.loading && message[0] == 'pu') {
+              let [_, slotX, slotY, dirX, dirY, velocity, posX, posY] = message;
+              let slot = new Point(slotX, slotY).multiply(TILE_SIZE);
+              let direction = new Point(dirX, dirY);
+              let position = new Point(posX, posY);
+              let enemy = game.enemies.get(new Enemy(slot));
+
+              enemy.setPosition(position);
+              enemy.turn(direction);
+              enemy.velocity = velocity;
+            } else if (!game.loading && message[0] == 'b') {
+              let [_, bombX, bombY] = message;
+              game.bombs.add(new Bomb(new Point(bombX, bombY)));
+            }
+          }
+        });
+      } else {
+        game = loadGame(map0);
+
+        startGame(game);
+      }
+    }
+
+    function startGame(game) {
       setupControls();
       animatePlayer(game);
       animateEnemies(game);
@@ -383,11 +432,16 @@
       window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
     }
 
-    function loadGame(map) {
+    function loadGame(map, playerPosition, otherPlayers, socket) {
       let walls = new HashSet();
       let crates = new HashSet();
       let enemies = new HashSet();
-      let playerPosition;
+
+      if (otherPlayers) {
+        otherPlayers.forEach(spawnPoint => {
+          enemies.add(new Enemy(spawnPoint));
+        });
+      }
 
       map.forEach((row, y) => {
         row.split('').forEach((sprite, x) => {
@@ -401,6 +455,7 @@
       let player = new Player(playerPosition, DOWN);
 
       return {
+        socket: socket,
         state: 'active',
         map: map,
         player: player,
@@ -544,13 +599,19 @@
       if (game.state == 'active') {
         // Keep requesting new frames
         window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+      } else if (game.state == 'won') {
+        drawWon(game);
       } else {
-        drawFinished(game);
+        drawLost(game);
       }
     }
 
     function update(game, secondsPassed) {
       let { player, walls, crates, bombs, enemies } = game;
+
+      let oldDirection = DOWN;
+      let oldVelocity = player.velocity;
+      let oldPosition = player.position;
 
       if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
         player.velocity = PLAYER_VELOCITY;
@@ -578,10 +639,15 @@
       player.setPosition(position.add(direction.multiply(velocity * secondsPassed)));
 
       var nonTransparentBombs = new HashSet(bombs.toArray().filter(b => !b.transparent));
-      var obstacles = [walls, crates, nonTransparentBombs];
+      var obstacles;
+      if (game.socket) {
+        obstacles = [walls, crates, nonTransparentBombs, enemies];
+      } else {
+        obstacles = [walls, crates, nonTransparentBombs];
+      }
 
-      if (detectCollisions(player, [enemies], 'hitBox').length > 0) {
-        game.state = 'finished';
+      if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
+        game.state = 'lost';
         return;
       }
 
@@ -636,35 +702,41 @@
           }
         }
       }
+
+      if (game.socket && (oldDirection != player.direction || oldVelocity != player.velocity || !oldPosition.equals(player.position))) {
+        game.socket.send(JSON.stringify(["u", player.direction.x, direction.y, player.velocity, player.position.x, player.position.y]));
+      }
     }
 
     function updateEnemies(game, secondsPassed, obstacles) {
       let { enemies } = game;
 
       enemies.forEach(enemy => {
-        enemy.velocity = ENEMY_VELOCITY;
+        if (!game.socket) {
+          enemy.velocity = ENEMY_VELOCITY;
 
-        enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
+          enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
 
-        let hits = detectCollisions(enemy, obstacles);
+          let hits = detectCollisions(enemy, obstacles);
 
-        if (hits.length > 0) {
-          let hit = hits[0];
+          if (hits.length > 0) {
+            let hit = hits[0];
 
-          if (enemy.direction.vertical()) {
-            // colliding against obstacle
-            let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
+            if (enemy.direction.vertical()) {
+              // colliding against obstacle
+              let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
 
-            enemy.setPosition(new Point(enemy.position.x, newY));
-          } else if (enemy.direction.horizontal()) {
-            // colliding against obstacle
-            let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
+              enemy.setPosition(new Point(enemy.position.x, newY));
+            } else if (enemy.direction.horizontal()) {
+              // colliding against obstacle
+              let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
 
-            enemy.setPosition(new Point(newX, enemy.position.y));
+              enemy.setPosition(new Point(newX, enemy.position.y));
+            }
+
+            if (enemy.direction.horizontal()) enemy.turn(Math.random() < 0.5 ? UP : DOWN);
+            else if (enemy.direction.vertical()) enemy.turn(Math.random() < 0.5 ? LEFT : RIGHT);
           }
-
-          if (enemy.direction.horizontal()) enemy.turn(Math.random() < 0.5 ? UP : DOWN);
-          else if (enemy.direction.vertical()) enemy.turn(Math.random() < 0.5 ? LEFT : RIGHT);
         }
       });
     }
@@ -694,6 +766,7 @@
       let bomb = new Bomb(tilePosition.multiply(TILE_SIZE));
 
       if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
+        if (game.socket) game.socket.send(JSON.stringify(["b", bomb.position.x, bomb.position.y]));
         game.bombs.add(bomb);
       }
     }
@@ -777,7 +850,7 @@
       let blast = new Blast(bomb.position);
 
       if (detectCollisions(player, [[bomb]], 'hitBox').length > 0) {
-        game.state = 'finished';
+        game.state = 'lost';
       }
 
       blastDirections.forEach(([dir, dirName]) => {
@@ -801,11 +874,14 @@
             } else if (hit instanceof Enemy) {
               enemies.delete(hit);
               blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
+              if (enemies.size == 0) {
+                game.state = 'won';
+              }
             } else if (hit instanceof StaticTile && hit.sprite == 'C') {
               crates.delete(hit);
               blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
             } else if (hit instanceof Player) {
-              game.state = 'finished';
+              game.state = 'lost';
               blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
             }
 
@@ -872,13 +948,24 @@
       uiContext.fillText("FPS: " + fps, 4, 10);
     }
 
-    function drawFinished(game) {
+    function drawWon(game) {
       // Draw number to the screen
       uiContext.font = '24px pixeloid';
       uiContext.fillStyle = 'white';
       uiContext.textAlign = 'center';
       uiContext.fillText(
-        "YOU DIED",
+        "YOU WON!",
+        uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
+      );
+    }
+
+    function drawLost(game) {
+      // Draw number to the screen
+      uiContext.font = '24px pixeloid';
+      uiContext.fillStyle = 'white';
+      uiContext.textAlign = 'center';
+      uiContext.fillText(
+        "YOU LOST",
         uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
       );
     }
@@ -891,10 +978,6 @@
         drawSprite(gameContext, crate.position, crate.sprite);
       })
 
-      game.enemies.forEach(enemy => {
-        drawSprite(gameContext, enemy.position.round(), enemy.sprite);
-      });
-
       game.bombs.forEach(bomb => {
         drawSprite(gameContext, bomb.position, bomb.sprite);
       });
@@ -903,6 +986,10 @@
         blast.segments.forEach(segment => {
           drawSprite(gameContext, segment.position, segment.sprite);
         });
+      });
+
+      game.enemies.forEach(enemy => {
+        drawSprite(gameContext, enemy.position.round(), enemy.sprite);
       });
 
       drawSprite(gameContext, game.player.position.round(), game.player.sprite);
