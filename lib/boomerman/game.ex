@@ -48,7 +48,7 @@ defmodule Boomerman.Game do
 
   @map_definition [
     "%##################%",
-    "%PGGCGGGGCGGGGGGGGG%",
+    "%PGGCGGGGCPGGGGGGGP%",
     "%G#G#C#G#G#G#GGGGGG%",
     "%GGCGCGPGGGGGCGGGGG%",
     "%G#G#C#C#G#G#G%##%G%",
@@ -56,7 +56,7 @@ defmodule Boomerman.Game do
     "%G#G#G#G#C#G#G%  %G%",
     "%GGGGGGGCGGGGG%##%G%",
     "%G#G#G#G#G#G#GGGGGG%",
-    "%GGGCGGGGCCCCPGGGGG%",
+    "%PGGCGGGPCCCCGGGGGP%",
     "%##################%"
   ]
 
