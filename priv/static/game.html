@@ -375,8 +375,11 @@
       let game = { loading: true };
 
       if (multiplayer) {
-        const socket = new WebSocket("wss://boomerman.fly.dev/socket/websocket");
-        // const socket = new WebSocket("ws://localhost:4000/socket/websocket");
+        const protocol = window.location.protocol == 'http:' ? 'ws:' : 'wss:';
+        const host = window.location.host;
+        const socketUrl = protocol + "//" + host + "/socket/websocket";
+
+        const socket = new WebSocket(socketUrl);
 
         socket.addEventListener("open", (event) => {
           socket.send("register");
