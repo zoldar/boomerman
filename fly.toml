@@ -10,7 +10,7 @@ kill_signal = "SIGTERM"
 [build]
 
 [env]
-  PHX_HOST = "boomerman.fly.dev"
+  PHX_HOST = "boomerman.todo.computer"
   PORT = "8080"
 
 [http_service]
