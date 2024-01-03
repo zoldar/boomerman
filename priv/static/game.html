@@ -633,7 +633,14 @@
         dropBomb(game);
       }
 
-      updateEnemies(game, secondsPassed, [walls, crates, bombs]);
+      let enemyObstacles;
+      if (game.socket) {
+        enemyObstacles = [walls, crates, [player]];
+      } else {
+        enemyObstacles = [walls, crates, bombs];
+      }
+
+      updateEnemies(game, secondsPassed, enemyObstacles);
       updateBombs(game);
       updateBlasts(game);
 
@@ -705,7 +712,7 @@
         }
       }
 
-      if (game.socket && (!oldDirection.equals(player.direction) || oldVelocity != player.velocity || (game.socketTime > 0.05 && !oldPosition.equals(player.position)))) {
+      if (game.socket && (!oldDirection.equals(player.direction) || oldVelocity != player.velocity)) {
         game.socket.send(JSON.stringify(["u", player.direction.x, direction.y, player.velocity, player.position.x, player.position.y]));
 
         game.socketTime = 0;
@@ -720,26 +727,63 @@
       enemies.forEach(enemy => {
         if (!game.socket) {
           enemy.velocity = ENEMY_VELOCITY;
+        }
 
-          enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
+        enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
 
-          let hits = detectCollisions(enemy, obstacles);
+        let hits = detectCollisions(enemy, obstacles);
 
-          if (hits.length > 0) {
-            let hit = hits[0];
+        if (hits.length > 0) {
+          let hit = hits[0];
 
-            if (enemy.direction.vertical()) {
-              // colliding against obstacle
-              let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
+          if (enemy.direction.vertical()) {
+            // colliding against obstacle
+            let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
 
+
+            // sliding to the side - enemy players only
+            if (game.socket && hits.length == 1) {
+              let newX;
+              if (enemy.position.x - hit.position.x > 0) {
+                newX = Math.round(enemy.position.x) + 1;
+              } else {
+                newX = Math.round(enemy.position.x) - 1;
+              }
+
+              if (detectCollisions(enemy.atPosition(new Point(newX, hit.position.y)), obstacles).length <= 1
+                && detectCollisions(enemy.atPosition(new Point(newX, newY)), obstacles).length == 0) {
+                enemy.setPosition(new Point(newX, newY));
+              } else {
+                enemy.setPosition(new Point(enemy.position.x, newY));
+              }
+            } else {
               enemy.setPosition(new Point(enemy.position.x, newY));
-            } else if (enemy.direction.horizontal()) {
-              // colliding against obstacle
-              let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
+            }
+          } else if (enemy.direction.horizontal()) {
+            // colliding against obstacle
+            let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
 
+            // sliding to the side - enemy enemys only
+            if (game.socket && hits.length == 1) {
+              let newY;
+              if (enemy.position.y - hit.position.y > 0) {
+                newY = Math.round(enemy.position.y + (SLIDE_VELOCITY * secondsPassed));
+              } else {
+                newY = Math.round(enemy.position.y - (SLIDE_VELOCITY * secondsPassed));
+              }
+
+              if (detectCollisions(enemy.atPosition(new Point(hit.position.x, newY)), obstacles).length <= 1
+                && detectCollisions(enemy.atPosition(new Point(newX, newY)), obstacles).length == 0) {
+                enemy.setPosition(new Point(newX, newY));
+              } else {
+                enemy.setPosition(new Point(newX, enemy.position.y));
+              }
+            } else {
               enemy.setPosition(new Point(newX, enemy.position.y));
             }
+          }
 
+          if (!game.socket) {
             if (enemy.direction.horizontal()) enemy.turn(Math.random() < 0.5 ? UP : DOWN);
             else if (enemy.direction.vertical()) enemy.turn(Math.random() < 0.5 ? LEFT : RIGHT);
           }
