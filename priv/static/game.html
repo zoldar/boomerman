@@ -159,7 +159,11 @@
       }
 
       forEach(fun) {
-        this.hashMap.forEach(value => fun(value));
+        let idx = 0;
+        this.hashMap.forEach((value) => {
+          fun(value, idx);
+          idx++;
+        });
       }
 
       get size() {
@@ -261,6 +265,7 @@
       'blast_powerup': [-1, 9],
       'speed_powerup': [-1, 10],
       'surprise_powerup': [-1, 11],
+      'powerup_icon_bg': [-1, 12],
       'bomb_big1': [5, 4],
       'bomb_small1': [5, 5],
       'bomb_big2': [5, 6],
@@ -497,7 +502,7 @@
     }
 
     // const powerupTypes = ['bomb', 'blast', 'speed', 'surprise'];
-    const powerupTypes = ['blast', 'speed'];
+    const powerupTypes = ['bomb', 'blast', 'speed'];
 
     class Powerup {
       type;
@@ -899,12 +904,16 @@
     }
 
     function dropBomb(game) {
-      let tilePosition = game.player.position.divide(TILE_SIZE).round();
-      let bomb = new Bomb(tilePosition.multiply(TILE_SIZE));
+      let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 6 : 2;
 
-      if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
-        if (game.socket) game.socket.send(JSON.stringify(["b", bomb.position.x, bomb.position.y]));
-        game.bombs.add(bomb);
+      if (game.bombs.size < maxBombs) {
+        let tilePosition = game.player.position.divide(TILE_SIZE).round();
+        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE));
+
+        if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
+          if (game.socket) game.socket.send(JSON.stringify(["b", bomb.position.x, bomb.position.y]));
+          game.bombs.add(bomb);
+        }
       }
     }
 
@@ -1016,7 +1025,7 @@
               }
             } else if (hit instanceof StaticTile && hit.sprite == 'C') {
               crates.delete(hit);
-              if (!game.socket && Math.random() > 0.7) {
+              if (!game.socket && Math.random() > 0.5) {
                 let type = powerupTypes[(Math.floor(Math.random() * powerupTypes.length))];
                 game.powerups.add(new Powerup(type, hit.position));
               }
@@ -1087,6 +1096,13 @@
       uiContext.font = '8px pixeloid';
       uiContext.fillStyle = 'white';
       uiContext.fillText("FPS: " + fps, 4, 10);
+
+      game.player.powerups.forEach((powerup, idx) => {
+        let x = uiCanvas.width - ((TILE_SIZE + 4) * (1 + idx));
+
+        drawSprite(uiContext, new Point(x, 0), "powerup_icon_bg");
+        drawSprite(uiContext, new Point(x, 0), powerup.icon);
+      });
     }
 
     function drawWon(game) {
