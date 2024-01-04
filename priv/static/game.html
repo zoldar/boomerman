@@ -501,8 +501,8 @@
       }
     }
 
-    // const powerupTypes = ['bomb', 'blast', 'speed', 'surprise'];
-    const powerupTypes = ['bomb', 'blast', 'speed'];
+    const powerupTypesNoSurprise = ['bomb', 'blast', 'speed'];
+    const powerupTypes = powerupTypesNoSurprise.concat(['surprise']);
 
     class Powerup {
       type;
@@ -748,7 +748,13 @@
       if (powerupHits.length > 0) {
         let hit = powerupHits[0];
 
-        game.player.powerups.add(hit.icon());
+        if (hit.type == 'surprise') {
+          let type = powerupTypesNoSurprise[(Math.floor(Math.random() * powerupTypesNoSurprise.length))];
+          player.powerups.add(new PowerupIcon(type));
+        } else {
+          player.powerups.add(hit.icon());
+        }
+
         game.powerups.delete(hit);
       }
 
