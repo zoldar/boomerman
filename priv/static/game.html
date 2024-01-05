@@ -22,7 +22,7 @@
       touch-action: none;
     }
 
-    #sprite-sheet {
+    .sheet {
       display: none;
     }
 
@@ -69,7 +69,10 @@
 </head>
 
 <body>
-  <img alt="Spritesheet" id="sprite-sheet" src="images/bomb_party_v5.png">
+  <img alt="City Spritesheet" class="sheet" id="city-sheet" src="images/city.png">
+  <img alt="Bombermen Spritesheet" class="sheet" , id="bombermen-sheet" src="images/bombermen.png">
+  <img alt="Enemies Spritesheet" class="sheet" id="enemies-sheet" src="images/enemies.png">
+  <img alt="Items Spritesheet" class="sheet" id="items-sheet" src="images/items.png">
 
   <div id="stage">
     <canvas id="ui-layer" width="320" height="200"></canvas>
@@ -225,110 +228,177 @@
     let gameCanvas;
     let gameContext;
     let oldTimeStamp = 0;
-    let sheet = document.getElementById("sprite-sheet");
     let keys = {}
 
-    let sprites = {
-      '#': [-1, 0],
-      '%': [-2, 0],
-      'G': [0, 1],
-      'C': [0, 9],
-      'gnome_stand_up': [1, 0],
-      'gnome_walk_up1': [1, 8],
-      'gnome_walk_up2': [1, 9],
-      'gnome_stand_down': [1, 1],
-      'gnome_walk_down1': [1, 2],
-      'gnome_walk_down2': [1, 3],
-      'gnome_stand_right': [1, 4],
-      'gnome_walk_right1': [1, 5],
-      'gnome_walk_right2': [1, 6],
-      'gnome_walk_right3': [1, 7],
-      'gnome_stand_left': [0, 4],
-      'gnome_walk_left1': [0, 5],
-      'gnome_walk_left2': [0, 6],
-      'gnome_walk_left3': [0, 7],
-      'dude_stand_up': [4, 0],
-      'dude_walk_up1': [4, 8],
-      'dude_walk_up2': [4, 9],
-      'dude_stand_down': [4, 1],
-      'dude_walk_down1': [4, 2],
-      'dude_walk_down2': [4, 3],
-      'dude_stand_right': [4, 4],
-      'dude_walk_right1': [4, 5],
-      'dude_walk_right2': [4, 6],
-      'dude_walk_right3': [4, 7],
-      'dude_stand_left': [-1, 4],
-      'dude_walk_left1': [-1, 5],
-      'dude_walk_left2': [-1, 6],
-      'dude_walk_left3': [-1, 7],
-      'bomb_powerup': [-1, 8],
-      'blast_powerup': [-1, 9],
-      'speed_powerup': [-1, 10],
-      'surprise_powerup': [-1, 11],
-      'powerup_icon_bg': [-1, 12],
-      'confused_powerup': [-1, 13],
-      'bomb_big1': [5, 4],
-      'bomb_small1': [5, 5],
-      'bomb_big2': [5, 6],
-      'bomb_small2': [5, 7],
-      'bomb_big3': [5, 8],
-      'bomb_small3': [5, 9],
-      'explosion1': [5, 2],
-      'explosion2': [5, 14],
-      'explosion3': [4, 14],
-      'explosion4': [3, 14],
-      'blast_left': [5, 0],
-      'blast_horizontal': [5, 1],
-      'blast_right': [5, 3],
-      'blast_up': [0, 14],
-      'blast_vertical': [1, 14],
-      'blast_down': [2, 14]
+    const mapSheet = {
+      height: 16,
+      sheet: document.getElementById('city-sheet'),
+      '[': [0, 1],
+      ']': [0, 8],
+      '{': [2, 1],
+      '}': [2, 7],
+      '@': [1, 1],
+      'O': [2, 8],
+      '%': [0, 3],
+      '#': [2, 2],
+      'G': [2, 3],
+      'S': [1, 3],
+      'C': [0, 4],
+      'bomb1': [4, 0],
+      'bomb2': [4, 1],
+      'bomb3': [4, 2],
+      'explosion1': [5, 5],
+      'explosion2': [5, 6],
+      'explosion3': [5, 7],
+      'explosion4': [6, 4],
+      'blast_vertical1': [6, 5],
+      'blast_vertical2': [6, 6],
+      'blast_vertical3': [6, 7],
+      'blast_vertical4': [7, 2],
+      'blast_horizontal1': [5, 0],
+      'blast_horizontal2': [6, 0],
+      'blast_horizontal3': [7, 0],
+      'blast_horizontal4': [5, 2],
+      'blast_up1': [4, 7],
+      'blast_up2': [4, 6],
+      'blast_up3': [4, 5],
+      'blast_up4': [4, 4],
+      'blast_down1': [7, 5],
+      'blast_down2': [7, 6],
+      'blast_down3': [7, 7],
+      'blast_down4': [7, 4],
+      'blast_left1': [3, 4],
+      'blast_left2': [3, 3],
+      'blast_left3': [3, 2],
+      'blast_left4': [3, 1],
+      'blast_right1': [5, 1],
+      'blast_right2': [6, 1],
+      'blast_right3': [7, 1],
+      'blast_right4': [5, 3]
+    }
+
+    const itemSheet = {
+      height: 16,
+      sheet: document.getElementById('items-sheet'),
+      'speed_powerup': [2, 1],
+      'speed_powerup2': [3, 1],
+      'surprise_powerup': [4, 2],
+      'surprise_powerup2': [5, 2],
+      'blast_powerup': [0, 3],
+      'blast_powerup2': [1, 3],
+      'bomb_powerup': [0, 0],
+      'bomb_powerup2': [1, 0],
+      'confused_powerup': [0, 5],
+      'confused_powerup2': [1, 5]
+    };
+
+    const enemySheet = {
+      height: 25,
+      sheet: document.getElementById('enemies-sheet'),
+      'walk_down1': [1, 0],
+      'walk_down2': [1, 1],
+      'walk_down3': [1, 2],
+      'walk_down4': [1, 3],
+      'walk_down5': [1, 4],
+      'walk_down6': [1, 5],
+      'walk_down7': [1, 6],
+      'walk_down8': [1, 7],
+      'walk_down9': [1, 8],
+      'walk_up1': [2, 0],
+      'walk_up2': [2, 1],
+      'walk_up3': [2, 2],
+      'walk_up4': [2, 3],
+      'walk_up5': [2, 4],
+      'walk_up6': [2, 5],
+      'walk_up7': [2, 6],
+      'walk_up8': [2, 7],
+      'walk_up9': [2, 8],
+      'walk_left1': [3, 0],
+      'walk_left2': [3, 1],
+      'walk_left3': [3, 2],
+      'walk_left4': [3, 3],
+      'walk_left5': [3, 4],
+      'walk_left6': [3, 5],
+      'walk_left7': [3, 6],
+      'walk_right1': [4, 0],
+      'walk_right2': [4, 1],
+      'walk_right3': [4, 2],
+      'walk_right4': [4, 3],
+      'walk_right5': [4, 4],
+      'walk_right6': [4, 5],
+      'walk_right7': [4, 6]
+    };
+
+    const bombermanSheet = {
+      height: 25,
+      sheet: document.getElementById('bombermen-sheet'),
+      'walk_up1': [0, 0],
+      'walk_up2': [0, 1],
+      'walk_up3': [0, 2],
+      'walk_left1': [1, 0],
+      'walk_left2': [1, 1],
+      'walk_left3': [1, 2],
+      'walk_down1': [1, 3],
+      'walk_down2': [1, 4],
+      'walk_down3': [1, 5],
+      'walk_right1': [1, 6],
+      'walk_right2': [1, 7],
+      'walk_right3': [1, 8],
+    }
+
+    const sheets = {
+      'map': mapSheet,
+      'bombermen': bombermanSheet,
+      'enemies': enemySheet,
+      'items': itemSheet
     };
 
     let playerAnimations = {
-      'stand_up': ['dude_stand_up'],
-      'walk_up': ['dude_walk_up1', 'dude_walk_up2'],
-      'stand_down': ['dude_stand_down'],
-      'walk_down': ['dude_walk_down1', 'dude_walk_down2'],
-      'stand_right': ['dude_stand_right'],
-      'walk_right': ['dude_walk_right1', 'dude_walk_right2', 'dude_walk_right3'],
-      'stand_left': ['dude_stand_left'],
-      'walk_left': ['dude_walk_left1', 'dude_walk_left2', 'dude_walk_left3']
+      sheet: 'bombermen',
+      'stand_up': ['walk_up2'],
+      'walk_up': ['walk_up3', 'walk_up1', 'walk_up2'],
+      'stand_down': ['walk_down2'],
+      'walk_down': ['walk_down3', 'walk_down1', 'walk_down2'],
+      'stand_right': ['walk_right1'],
+      'walk_right': ['walk_right2', 'walk_right3', 'walk_right1'],
+      'stand_left': ['walk_left1'],
+      'walk_left': ['walk_left2', 'walk_left3', 'walk_left1']
     };
 
     let enemyAnimations = {
-      'stand_up': ['gnome_stand_up'],
-      'walk_up': ['gnome_walk_up1', 'gnome_walk_up2'],
-      'stand_down': ['gnome_stand_down'],
-      'walk_down': ['gnome_walk_down1', 'gnome_walk_down2'],
-      'stand_right': ['gnome_stand_right'],
-      'walk_right': ['gnome_walk_right1', 'gnome_walk_right2', 'gnome_walk_right3'],
-      'stand_left': ['gnome_stand_left'],
-      'walk_left': ['gnome_walk_left1', 'gnome_walk_left2', 'gnome_walk_left3']
+      sheet: 'ememies',
+      'stand_up': ['walk_up2', 'walk_up1', 'walk_up9', 'walk_up1'],
+      'walk_up': ['walk_up1', 'walk_up2', 'walk_up3', 'walk_up4', 'walk_up5', 'walk_up6', 'walk_up7', 'walk_up8', 'walk_up9'],
+      'stand_down': ['walk_down2', 'walk_down1', 'walk_down9', 'walk_down1'],
+      'walk_down': ['walk_down1', 'walk_down2', 'walk_down3', 'walk_down4', 'walk_down5', 'walk_down6', 'walk_down7', 'walk_down8', 'walk_down9'],
+      'stand_right': ['walk_right1', 'walk_right7'],
+      'walk_right': ['walk_right1', 'walk_right2', 'walk_right3', 'walk_right4', 'walk_right5', 'walk_right6', 'walk_right7'],
+      'stand_left': ['walk_left1', 'walk_left7'],
+      'walk_left': ['walk_left1', 'walk_left2', 'walk_left3', 'walk_left4', 'walk_left5', 'walk_left6', 'walk_left7'],
     };
 
     let map0 = [
-      "%##################%",
-      "%EGGCGGGGCEGGGGGGGE%",
-      "%G#G#C#G#G#G#GGGGGG%",
-      "%GGCGCGEGGGGGCGGGGG%",
-      "%G#G#C#C#G#G#G%##%G%",
-      "%GGGGGGGGCGGGG%  %G%",
-      "%G#G#G#G#C#G#G%  %G%",
-      "%GGGGGGGCGGGGG%##%G%",
-      "%G#G#G#G#G#G#GGGGGG%",
-      "%EGGCGGGECCCCGGGGGP%",
-      "%##################%"
+      "[%%%%%%%%%%%%%%%%%%]",
+      "@ESSCSSSSCESSSSSSSEO",
+      "@G#G#C#G#G#G#GGGGGGO",
+      "@GGCGCGEGGGGGCGGGGGO",
+      "@G#G#C#C#G#G#G[%%]GO",
+      "@GGGGGGGGCGGGG@  OGO",
+      "@G#G#G#G#C#G#G@  OGO",
+      "@GGGGGGGCGGGGG{##}GO",
+      "@G#G#G#G#G#G#GGGGGGO",
+      "@EGGCGGGECCCCGGGGGPO",
+      "{##################}"
     ];
 
-    let wallSprites = new Set(['#', '%']);
+    let wallSprites = new Set(['@', 'O', '#', '%', '{', '}', '[', ']']);
 
     class Enemy {
       spawnPoint;
       position;
       direction = DOWN;
       velocity = 0;
-      sprite = 'gnome_stand_down';
+      sprite = 'walk_down1';
       boundingBox;
       hitBox;
 
@@ -366,7 +436,7 @@
       boundingBox;
       hitBox;
       // set by animation loop
-      sprite = 'dude_stand_down';
+      sprite = 'walk_down1';
 
       constructor(position, direction) {
         this.setPosition(position);
@@ -458,6 +528,7 @@
       setupControls();
       animatePlayer(game);
       animateEnemies(game);
+      animateBombs(game);
 
       drawBackground(game);
 
@@ -652,6 +723,23 @@
           let frames = enemyAnimations[animation];
 
           enemy.sprite = frames[currentFrame % frames.length];
+        });
+
+        currentFrame = (currentFrame + 1) % maxFrame;
+      }, 200);
+    }
+
+    const bombFrames = ['bomb1', 'bomb2', 'bomb3', 'bomb2'];
+
+    function animateBombs(game) {
+      let maxFrame = 4;
+      let currentFrame = 0;
+
+      setInterval(function () {
+        game.bombs.forEach(bomb => {
+          if (bomb.state == 'burning' || bomb.state == 'ignition') {
+            bomb.sprite = bombFrames[currentFrame % bombFrames.length];
+          }
         });
 
         currentFrame = (currentFrame + 1) % maxFrame;
@@ -893,6 +981,7 @@
     class Bomb {
       position;
       transparent = true;
+      // animated by animateBombs when in burning and ignition state
       sprite = 'bomb1';
       state = 'burning';
       droppedAt;
@@ -937,10 +1026,7 @@
           }
         }
 
-        if (bomb.state == 'burning' && timePassed < 3) {
-          let count = Math.floor(timePassed) + 1;
-          bomb.sprite = "bomb_small" + count;
-        } else if (bomb.state == 'burning' && timePassed >= 3) {
+        if (bomb.state == 'burning' && timePassed >= 3) {
           bomb.state = 'ignition';
         } else if (bomb.state == 'ignition') {
           bomb.state = 'exploding';
@@ -983,12 +1069,18 @@
     class BlastSegment {
       positon;
       boundingBox;
+      spritePrefix;
       sprite;
 
-      constructor(position, sprite) {
+      constructor(position, spritePrefix) {
         this.position = position;
         this.boundingBox = fullBoundingBox(position);
-        this.sprite = sprite;
+        this.spritePrefix = spritePrefix;
+        this.sprite = spritePrefix + '1';
+      }
+
+      setFrame(frame) {
+        this.sprite = this.spritePrefix + frame;
       }
 
       hash() {
@@ -1069,7 +1161,11 @@
       let now = performance.now();
 
       blasts.forEach(blast => {
-        if (now - blast.startedAt > 100) {
+        let explosionCount = Math.max(Math.floor((now - blast.startedAt) / 150) + 1, 1);
+
+        if (explosionCount <= 4) {
+          blast.segments.forEach(segment => segment.setFrame(explosionCount));
+        } else {
           blasts.delete(blast);
         }
       });
@@ -1107,8 +1203,7 @@
       game.player.powerups.forEach((powerup, idx) => {
         let x = uiCanvas.width - ((TILE_SIZE + 4) * (1 + idx));
 
-        drawSprite(uiContext, new Point(x, 0), "powerup_icon_bg");
-        drawSprite(uiContext, new Point(x, 0), powerup.icon);
+        drawSprite(uiContext, 'items', new Point(x, 0), powerup.icon);
       });
     }
 
@@ -1139,52 +1234,55 @@
       gameContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
       game.crates.forEach(crate => {
-        drawSprite(gameContext, crate.position, crate.sprite);
+        drawSprite(gameContext, 'map', crate.position, crate.sprite);
       })
 
       game.powerups.forEach(powerup => {
-        drawSprite(gameContext, powerup.position, powerup.sprite);
+        drawSprite(gameContext, 'items', powerup.position, powerup.sprite);
       });
 
       game.bombs.forEach(bomb => {
-        drawSprite(gameContext, bomb.position, bomb.sprite);
+        drawSprite(gameContext, 'map', bomb.position, bomb.sprite);
       });
 
       game.blasts.forEach(blast => {
         blast.segments.forEach(segment => {
-          drawSprite(gameContext, segment.position, segment.sprite);
+          drawSprite(gameContext, 'map', segment.position, segment.sprite);
         });
       });
 
       game.enemies.forEach(enemy => {
-        drawSprite(gameContext, enemy.position.round(), enemy.sprite);
+        drawSprite(gameContext, 'enemies', enemy.position.round(), enemy.sprite);
       });
 
-      drawSprite(gameContext, game.player.position.round(), game.player.sprite);
+      drawSprite(gameContext, 'bombermen', game.player.position.round(), game.player.sprite);
     }
 
     function drawBackground(game) {
       game.map.forEach((row, y) => {
         row.split('').forEach((sprite, x) => {
           let finalSprite = sprite == 'C' || sprite == 'E' || sprite == 'P' ? 'G' : sprite;
-          if (finalSprite != ' ') drawSprite(bgContext, (new Point(x, y)).multiply(TILE_SIZE), finalSprite);
+          if (finalSprite != ' ') drawSprite(bgContext, 'map', (new Point(x, y)).multiply(TILE_SIZE), finalSprite);
         });
       });
     }
 
-    function drawSprite(context, point, sprite) {
+    function drawSprite(context, sheetName, point, sprite) {
+      let sprites = sheets[sheetName];
       let [row, column] = sprites[sprite];
 
+      let verticalOffset = sprites.height - TILE_SIZE;
+
       context.drawImage(
-        sheet,
+        sprites.sheet,
         column * TILE_SIZE,
-        (13 + row) * TILE_SIZE,
+        row * (TILE_SIZE + verticalOffset),
         TILE_SIZE,
-        TILE_SIZE,
+        (TILE_SIZE + verticalOffset),
         point.x,
-        point.y,
+        point.y - verticalOffset,
         TILE_SIZE,
-        TILE_SIZE
+        (TILE_SIZE + verticalOffset)
       );
     }
   </script>
