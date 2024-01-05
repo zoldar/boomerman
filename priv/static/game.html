@@ -179,6 +179,7 @@
     const POWERUP_VELOCITY = 72;
     const ENEMY_VELOCITY = 24;
     const SLIDE_VELOCITY = 60;
+    const POWERUP_SECONDS = 15;
     const UP = new Point(0, -1);
     const DOWN = new Point(0, 1);
     const LEFT = new Point(-1, 0);
@@ -601,10 +602,12 @@
     class PowerupIcon {
       type;
       icon;
+      collectedAt;
 
       constructor(type) {
         this.type = type;
         this.icon = type + '_powerup';
+        this.collectedAt = performance.now();
       }
 
       hash() {
@@ -811,6 +814,7 @@
         enemyObstacles = [walls, crates, bombs];
       }
 
+      updatePlayerPowerups(game);
       updateEnemies(game, secondsPassed, enemyObstacles);
       updateBombs(game);
       updateBlasts(game);
@@ -906,6 +910,16 @@
       }
 
       game.socketTime += secondsPassed;
+    }
+
+    function updatePlayerPowerups(game) {
+      let now = performance.now();
+
+      game.player.powerups.forEach(powerup => {
+        if ((now - powerup.collectedAt) > POWERUP_SECONDS * 1000) {
+          game.player.powerups.delete(powerup);
+        }
+      });
     }
 
     function updateEnemies(game, secondsPassed, obstacles) {
@@ -1200,10 +1214,21 @@
       uiContext.fillStyle = 'white';
       uiContext.fillText("FPS: " + fps, 4, 10);
 
+      let now = performance.now();
+
       game.player.powerups.forEach((powerup, idx) => {
+        let powerupTimeRatio = ((now - powerup.collectedAt) / 1000) / POWERUP_SECONDS;
         let x = uiCanvas.width - ((TILE_SIZE + 4) * (1 + idx));
 
-        drawSprite(uiContext, 'items', new Point(x, 0), powerup.icon);
+        if (powerupTimeRatio <= 0.8 || (powerupTimeRatio > 0.8 && Math.floor(powerupTimeRatio / 0.02) % 2 == 0)) {
+          drawSprite(uiContext, 'items', new Point(x, 0), powerup.icon);
+        }
+
+        let powerupAngleRatio = Math.PI * powerupTimeRatio;
+        uiContext.fillStyle = "rgba(0, 0, 127, 0.4)";
+        uiContext.beginPath();
+        uiContext.arc(x + (TILE_SIZE / 2), TILE_SIZE / 2, TILE_SIZE / 2, Math.PI / -2 + powerupAngleRatio, Math.PI / -2 - powerupAngleRatio);
+        uiContext.fill();
       });
     }
 
