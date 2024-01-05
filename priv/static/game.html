@@ -153,6 +153,10 @@
         this.hashMap.delete(o.hash());
       }
 
+      clear() {
+        this.hashMap.clear();
+      }
+
       toArray() {
         return Array.from(this.hashMap.values());
       }
@@ -574,8 +578,8 @@
       }
     }
 
-    const powerupTypesNoSurprise = ['bomb', 'blast', 'speed'];
-    const powerupTypes = powerupTypesNoSurprise.concat(['surprise']);
+    const surprisePowerUps = ['bomb', 'blast', 'speed', 'clear'];
+    const powerupTypes = ['bomb', 'blast', 'speed', 'surprise'];
 
     class Powerup {
       type;
@@ -842,8 +846,12 @@
         let hit = powerupHits[0];
 
         if (hit.type == 'surprise') {
-          let type = powerupTypesNoSurprise[(Math.floor(Math.random() * powerupTypesNoSurprise.length))];
-          player.powerups.add(new PowerupIcon(type));
+          let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
+          if (type == 'clear') {
+            player.powerups.clear();
+          } else {
+            player.powerups.add(new PowerupIcon(type));
+          }
         } else {
           player.powerups.add(hit.icon());
         }
