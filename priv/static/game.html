@@ -129,6 +129,18 @@
       horizontal() {
         return this.x != 0 && this.y == 0;
       }
+
+      direction() {
+        return this.divide(this);
+      }
+
+      directionName() {
+        if (this.x > 0 && this.y == 0) return 'right';
+        if (this.x < 0 && this.y == 0) return 'left';
+        if (this.x == 0 && this.y > 0) return 'down';
+        if (this.x == 0 && this.y < 0) return 'up';
+        return 'none';
+      }
     }
 
     class HashSet {
@@ -755,15 +767,7 @@
 
     function getAnimation({ direction, velocity }) {
       let velocityStr = velocity > 0 ? 'walk' : 'stand';
-
-      let directionStr;
-
-      if (direction.equals(RIGHT)) directionStr = 'right';
-      else if (direction.equals(LEFT)) directionStr = 'left';
-      else if (direction.equals(DOWN)) directionStr = 'down';
-      else if (direction.equals(UP)) directionStr = 'up';
-
-      return velocityStr + '_' + directionStr;
+      return velocityStr + '_' + direction.directionName();
     }
 
     function gameLoop(timeStamp, game) {
@@ -1068,13 +1072,6 @@
       });
     }
 
-    let blastDirections = [
-      [RIGHT, 'right'],
-      [LEFT, 'left'],
-      [DOWN, 'down'],
-      [UP, 'up']
-    ];
-
     class Blast {
       origin;
       startedAt;
@@ -1122,10 +1119,10 @@
         game.state = 'lost';
       }
 
-      blastDirections.forEach(([dir, dirName]) => {
+      [UP, DOWN, LEFT, RIGHT].forEach(dir => {
         let position = blast.origin;
 
-        for (let i = 0; i < radius; i++) {
+        for (let idx = 0; idx < radius; idx++) {
           position = position.add(dir.multiply(TILE_SIZE));
 
           let hits = detectCollisions(
@@ -1140,9 +1137,10 @@
             if (hit instanceof Bomb && hit.state == 'burning') {
               hit.state = 'ignition';
               createBlast(game, hit);
+              break;
             } else if (hit instanceof Enemy) {
               enemies.delete(hit);
-              blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
+              blast.segments.add(createBlastSegment(position, dir, idx, radius));
               if (enemies.size == 0) {
                 game.state = 'won';
               }
@@ -1152,31 +1150,33 @@
                 let type = powerupTypes[(Math.floor(Math.random() * powerupTypes.length))];
                 game.powerups.add(new Powerup(type, hit.position));
               }
-              blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
+              blast.segments.add(createBlastSegment(position, dir, radius, radius));
+              break;
             } else if (hit instanceof Player) {
               game.state = 'lost';
-              blast.segments.add(new BlastSegment(position, 'blast_' + dirName));
-            }
-
-            break;
-          } else {
-            if (i < radius - 1) {
-              blast.segments.add(
-                new BlastSegment(
-                  position,
-                  'blast_' + (dir.horizontal() ? 'horizontal' : 'vertical')
-                )
-              );
+              blast.segments.add(createBlastSegment(position, dir, idx, radius));
             } else {
-              blast.segments.add(
-                new BlastSegment(position, 'blast_' + dirName)
-              );
+              // wall tiles sustain any blasts
+              break;
             }
+          } else {
+            blast.segments.add(createBlastSegment(position, dir, idx, radius));
           }
         }
       });
 
       blasts.add(blast);
+    }
+
+    function createBlastSegment(position, dir, idx, radius) {
+      if (idx < radius - 1) {
+        return new BlastSegment(
+          position,
+          'blast_' + (dir.horizontal() ? 'horizontal' : 'vertical')
+        );
+      } else {
+        return new BlastSegment(position, 'blast_' + dir.directionName());
+      }
     }
 
     function updateBlasts(game) {
