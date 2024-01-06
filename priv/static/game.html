@@ -591,7 +591,6 @@
 
       return {
         socket: socket,
-        socketTime: performance.now(),
         state: 'active',
         map: map,
         player: player,
@@ -804,7 +803,7 @@
       }
     }
 
-    function update(game, secondsPassed) {
+    function update(game, secondsPassed, directionOverride, deltaOverride) {
       let { player, walls, crates, bombs, enemies } = game;
 
       let oldDirection = player.direction;
@@ -814,10 +813,14 @@
       if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
         player.velocity = PLAYER_VELOCITY;
 
-        if (keys.ArrowUp) player.direction = UP;
-        if (keys.ArrowDown) player.direction = DOWN;
-        if (keys.ArrowLeft) player.direction = LEFT;
-        if (keys.ArrowRight) player.direction = RIGHT;
+        if (!directionOverride) {
+          if (keys.ArrowUp) player.turn(UP);
+          if (keys.ArrowDown) player.turn(DOWN);
+          if (keys.ArrowLeft) player.turn(LEFT);
+          if (keys.ArrowRight) player.turn(RIGHT);
+        } else {
+          player.turn(directionOverride);
+        }
       } else {
         player.velocity = 0;
       }
@@ -843,7 +846,9 @@
 
       let { direction, velocity, position } = player;
       velocity = velocity > 0 && player.powerups.has(SPEED_POWERUP) ? POWERUP_VELOCITY : velocity;
-      player.setPosition(position.add(direction.multiply(velocity * secondsPassed)));
+      let delta = velocity * secondsPassed;
+      delta = deltaOverride && deltaOverride < delta ? deltaOverride : delta;
+      player.setPosition(position.add(direction.multiply(delta)));
 
       var nonTransparentBombs = new HashSet(bombs.toArray().filter(b => !b.transparent));
       var obstacles;
@@ -885,57 +890,51 @@
         if (direction.vertical()) {
           // colliding against obstacle
           let newY = direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
+          player.setPosition(new Point(position.x, newY));
 
-          // sliding to the side
           if (hits.length == 1) {
-            let newX;
+            // sliding to the side
             if (player.position.x - hit.position.x > 0) {
-              newX = Math.round(position.x) + 1;
-            } else {
-              newX = Math.round(position.x) - 1;
-            }
+              let delta = hit.position.x + hit.boundingBox.width - player.position.x;
 
-            if (detectCollisions(player.atPosition(new Point(newX, hit.position.y)), obstacles).length <= 1
-              && detectCollisions(player.atPosition(new Point(newX, newY)), obstacles).length == 0) {
-              player.setPosition(new Point(newX, newY));
+              if (delta < hit.boundingBox.width * 0.75) {
+                update(game, secondsPassed, RIGHT, delta);
+              }
             } else {
-              player.setPosition(new Point(position.x, newY));
+              let delta = player.position.x + player.boundingBox.width - hit.position.x;
+
+              if (delta < hit.boundingBox.width * 0.75) {
+                update(game, secondsPassed, LEFT, delta);
+              }
             }
-          } else {
-            player.setPosition(new Point(position.x, newY));
           }
         } else if (direction.horizontal()) {
           // colliding against obstacle
           let newX = direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
+          player.setPosition(new Point(newX, position.y));
 
-          // sliding to the side
           if (hits.length == 1) {
-            let newY;
+            // sliding to the side
             if (player.position.y - hit.position.y > 0) {
-              newY = Math.round(position.y + (SLIDE_VELOCITY * secondsPassed));
-            } else {
-              newY = Math.round(position.y - (SLIDE_VELOCITY * secondsPassed));
-            }
+              let delta = hit.position.y + hit.boundingBox.height - player.position.y;
 
-            if (detectCollisions(player.atPosition(new Point(hit.position.x, newY)), obstacles).length <= 1
-              && detectCollisions(player.atPosition(new Point(newX, newY)), obstacles).length == 0) {
-              player.setPosition(new Point(newX, newY));
+              if (delta < hit.boundingBox.height * 0.75) {
+                update(game, secondsPassed, DOWN, delta);
+              }
             } else {
-              player.setPosition(new Point(newX, position.y));
+              let delta = player.position.y + player.boundingBox.height - hit.position.y;
+
+              if (delta < hit.boundingBox.height * 0.75) {
+                update(game, secondsPassed, UP, delta);
+              }
             }
-          } else {
-            player.setPosition(new Point(newX, position.y));
           }
         }
       }
 
-      if (game.socket && (!oldDirection.equals(player.direction) || oldVelocity != player.velocity)) {
-        game.socket.send(JSON.stringify(["u", player.direction.x, direction.y, player.velocity, player.position.x, player.position.y]));
-
-        game.socketTime = 0;
+      if (game.socket && !directionOverride && (!oldDirection.equals(player.direction) || oldVelocity != player.velocity)) {
+        game.socket.send(JSON.stringify(["u", player.direction.x, player.direction.y, player.velocity, player.position.x, player.position.y]));
       }
-
-      game.socketTime += secondsPassed;
     }
 
     function updatePlayerPowerups(game) {
