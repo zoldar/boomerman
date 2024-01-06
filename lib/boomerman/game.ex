@@ -44,15 +44,40 @@ defmodule Boomerman.Game do
 
       %{struct | definition: plain_definition}
     end
+
+    def remove_crate(map, {cx, cy}) do
+      crates = MapSet.delete(map.crates, {cx, cy})
+
+      definition =
+        Enum.map(Enum.with_index(map.definition), fn {row, y} ->
+          if cy == y do
+            {pre, "C" <> post} = String.split_at(row, cx)
+            pre <> "G" <> post
+          else
+            row
+          end
+        end)
+
+      %{map | crates: crates, definition: definition}
+    end
   end
 
   defmodule Player do
-    defstruct [:slot, :position, velocity: 0, direction: {0, 1}]
+    defstruct [:pid, :slot, :position, state: :active, velocity: 0, direction: {0, 1}]
 
     @tile_size 16
 
-    def new({x, y} = slot) do
-      %__MODULE__{slot: slot, position: {x * @tile_size, y * @tile_size}}
+    def new(pid, {x, y} = slot) do
+      %__MODULE__{pid: pid, slot: slot, position: {x * @tile_size, y * @tile_size}}
+    end
+
+    def hitbox(%{pid: pid, position: {px, py}}) do
+      %{
+        key: pid,
+        position: {px + @tile_size / 3, py + @tile_size / 3},
+        width: @tile_size / 3,
+        height: @tile_size / 3
+      }
     end
   end
 
@@ -75,6 +100,7 @@ defmodule Boomerman.Game do
   ]
 
   @map GameMap.build(@map_definition)
+  @tile_size 16
 
   @type slot() :: {non_neg_integer(), non_neg_integer()}
 
@@ -91,28 +117,16 @@ defmodule Boomerman.Game do
     )
   end
 
-  @spec register() :: {:ok, {map(), slot()}} | {:error, :no_slots}
+  @spec register() :: {:ok, {map(), slot(), map()}} | {:error, :no_slots}
   def register do
     case GenServer.call(__MODULE__, :register) do
-      {:ok, {map, slot}} ->
+      {:ok, {map, slot, players}} ->
         {:ok, _} = Registry.register(Boomerman.PlayerRegistry, "game", slot)
-        {:ok, {map, slot}}
+        {:ok, {map, slot, players}}
 
       {:error, error} ->
         {:error, error}
     end
-  end
-
-  def get_players do
-    Boomerman.PlayerRegistry
-    |> Registry.lookup("game")
-    |> Enum.reduce([], fn {player_pid, slot}, players ->
-      if player_pid != self() do
-        [slot | players]
-      else
-        players
-      end
-    end)
   end
 
   def update(direction, velocity, position) do
@@ -149,8 +163,8 @@ defmodule Boomerman.Game do
       [slot | slots] ->
         broadcast({:player_joined, slot}, pid)
 
-        {:reply, {:ok, {state.map.definition, slot}},
-         %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(slot))}}
+        {:reply, {:ok, {state.map.definition, slot, Map.values(state.players)}},
+         %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(pid, slot))}}
 
       [] ->
         {:reply, {:error, :no_slots}, state}
@@ -190,20 +204,20 @@ defmodule Boomerman.Game do
 
     now = System.monotonic_time()
 
-    bombs =
+    state =
       Enum.reduce(
         state.bombs,
-        %{bombs: state.bombs, crates: state.map.crates},
-        fn {position, bomb}, acc ->
+        state,
+        fn {position, bomb}, state ->
           if abs(now - bomb.planted_at) > 3 * @native_second do
-            %{acc | bombs: Map.delete(acc.bombs, position)}
+            blast_bomb(state, position, bomb.blast_radius)
           else
-            acc
+            state
           end
         end
       )
 
-    {:noreply, %{state | bombs: bombs}}
+    {:noreply, state}
   end
 
   def handle_info(:slot_cleanup, state) do
@@ -232,6 +246,68 @@ defmodule Boomerman.Game do
     {:noreply, %{state | free_slots: slots, players: players}}
   end
 
+  defp blast_bomb(state, {x, y} = position, blast_radius, blasted_bombs \\ MapSet.new()) do
+    directions = [{0, 1}, {0, -1}, {-1, 0}, {1, 0}]
+
+    player_hitboxes = Enum.map(state.players, fn {_, player} -> Player.hitbox(player) end)
+
+    state =
+      Enum.reduce(directions, state, fn {dx, dy}, state ->
+        Enum.reduce_while(1..blast_radius, state, fn current_radius, state ->
+          {cx, cy} = {x + current_radius * dx, y + current_radius * dy}
+
+          cond do
+            bomb = not MapSet.member?(blasted_bombs, {cx, cy}) && state.bombs[{cx, cy}] ->
+              broadcast({:bomb_blasted, {cx, cy}})
+
+              {:halt,
+               blast_bomb(state, {cx, cy}, bomb.blast_radius, MapSet.put(blasted_bombs, position))}
+
+            MapSet.member?(state.map.crates, {cx, cy}) ->
+              {:halt, %{state | map: GameMap.remove_crate(state.map, {cx, cy})}}
+
+            MapSet.member?(state.map.walls, {cx, cy}) ->
+              {:halt, state}
+
+            true ->
+              hit_pids =
+                collisions(full_hitbox({cx * @tile_size, cy * @tile_size}), player_hitboxes)
+
+              players =
+                Enum.reduce(hit_pids, state.players, fn pid, players ->
+                  if hit_player = players[pid] do
+                    broadcast({:player_blasted, hit_player.slot})
+                    Map.put(players, pid, %{hit_player | state: :eliminated})
+                  else
+                    players
+                  end
+                end)
+
+              {:cont, %{state | players: players}}
+          end
+        end)
+      end)
+
+    %{state | bombs: Map.delete(state.bombs, position)}
+  end
+
+  defp collisions(box, other_boxes) do
+    other_boxes
+    |> Enum.filter(&collides?(&1, box))
+    |> Enum.map(& &1.key)
+  end
+
+  defp collides?(
+         %{position: {x1, y1}, width: w1, height: h1},
+         %{position: {x2, y2}, width: w2, height: h2}
+       ) do
+    x1 < x2 + w2 and x1 + w1 > x2 and y1 < y2 + h2 and y1 + h1 > y2
+  end
+
+  defp full_hitbox(position) do
+    %{position: position, width: @tile_size, height: @tile_size}
+  end
+
   defp broadcast(message, except \\ nil) do
     Boomerman.PlayerRegistry
     |> Registry.lookup("game")
@@ -243,7 +319,7 @@ defmodule Boomerman.Game do
   end
 
   defp schedule_game_loop() do
-    Process.send_after(self(), :game_loop, 200)
+    Process.send_after(self(), :game_loop, 100)
   end
 
   defp schedule_slot_cleanup() do

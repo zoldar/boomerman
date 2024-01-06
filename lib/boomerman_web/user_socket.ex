@@ -23,8 +23,14 @@ defmodule BoomermanWeb.UserSocket do
 
   def handle_in({"register", _opts}, state) do
     case Game.register() do
-      {:ok, {map, {x, y}}} ->
-        players = Enum.map(Game.get_players(), fn {x, y} -> %{x: x, y: y} end)
+      {:ok, {map, {x, y}, players}} ->
+        players =
+          Enum.map(
+            players,
+            fn %{slot: {sx, sy}, position: {px, py}} ->
+              %{slot: %{x: sx, y: sy}, position: %{x: px, y: py}}
+            end
+          )
 
         {:reply, :ok,
          {:text, Jason.encode!(%{action: :registered, x: x, y: y, map: map, players: players})},
@@ -80,6 +86,14 @@ defmodule BoomermanWeb.UserSocket do
 
   def handle_info({:bomb_dropped, {x, y}, blast_radius}, state) do
     {:push, {:text, Jason.encode!(["b", x, y, blast_radius])}, state}
+  end
+
+  def handle_info({:bomb_blasted, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["bb", x, y])}, state}
+  end
+
+  def handle_info({:player_blasted, {slot_x, slot_y}}, state) do
+    {:push, {:text, Jason.encode!(["pb", slot_x, slot_y])}, state}
   end
 
   def handle_info(:send_ping, state) do

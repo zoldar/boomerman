@@ -509,7 +509,13 @@
 
             if (message.action == 'registered') {
               let playerPostion = new Point(message.x, message.y).multiply(TILE_SIZE);
-              let otherPlayers = message.players.map(p => new Point(p.x, p.y).multiply(TILE_SIZE));
+              let otherPlayers =
+                message.players.map(p => {
+                  return {
+                    slot: new Point(p.slot.x, p.slot.y).multiply(TILE_SIZE),
+                    position: new Point(p.position.x, p.position.y)
+                  }
+                });
 
               game = loadGame(message.map, playerPostion, otherPlayers, socket);
 
@@ -531,6 +537,12 @@
             } else if (!game.loading && message[0] == 'b') {
               let [_, bombX, bombY, blastRadius] = message;
               game.bombs.add(new Bomb(new Point(bombX * TILE_SIZE, bombY * TILE_SIZE), blastRadius));
+            } else if (!game.loading && message[0] == 'bb') {
+              let [_, bombX, bombY] = message;
+              console.log("Bomb blasted", bombX, bombY);
+            } else if (!game.loading && message[0] == 'pb') {
+              let [_, slotX, slotY] = message;
+              console.log('Player blasted', slotX, slotY);
             }
           }
         });
@@ -559,8 +571,10 @@
       let enemies = new HashSet();
 
       if (otherPlayers) {
-        otherPlayers.forEach(spawnPoint => {
-          enemies.add(new Enemy(spawnPoint));
+        otherPlayers.forEach(otherPlayer => {
+          let enemy = new Enemy(otherPlayer.slot);
+          enemy.setPosition(otherPlayer.position);
+          enemies.add(enemy);
         });
       }
 
@@ -1115,7 +1129,7 @@
       let radius = bomb.blastRadius;
       let blast = new Blast(bomb.position);
 
-      if (detectCollisions(player, [[bomb]], 'hitBox').length > 0) {
+      if (!game.socket && detectCollisions(player, [[bomb]], 'hitBox').length > 0) {
         game.state = 'lost';
       }
 
@@ -1136,13 +1150,14 @@
 
             if (hit instanceof Bomb && hit.state == 'burning') {
               hit.state = 'ignition';
-              createBlast(game, hit);
               break;
             } else if (hit instanceof Enemy) {
-              enemies.delete(hit);
               blast.segments.add(createBlastSegment(position, dir, idx, radius));
-              if (enemies.size == 0) {
-                game.state = 'won';
+              if (!game.socket) {
+                enemies.delete(hit);
+                if (enemies.size == 0) {
+                  game.state = 'won';
+                }
               }
             } else if (hit instanceof StaticTile && hit.sprite == 'C') {
               crates.delete(hit);
@@ -1153,7 +1168,7 @@
               blast.segments.add(createBlastSegment(position, dir, radius, radius));
               break;
             } else if (hit instanceof Player) {
-              game.state = 'lost';
+              if (!game.socket) game.state = 'lost';
               blast.segments.add(createBlastSegment(position, dir, idx, radius));
             } else {
               // wall tiles sustain any blasts
