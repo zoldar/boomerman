@@ -49,9 +49,9 @@ defmodule BoomermanWeb.UserSocket do
   end
 
   def handle_in({"[\"b\"" <> _ = message, _opts}, state) do
-    [_, bomb_x, bomb_y] = Jason.decode!(message)
+    [_, bomb_x, bomb_y, blast_radius] = Jason.decode!(message)
 
-    Game.drop_bomb({bomb_x, bomb_y})
+    Game.drop_bomb({bomb_x, bomb_y}, blast_radius)
 
     {:ok, state}
   end
@@ -78,8 +78,8 @@ defmodule BoomermanWeb.UserSocket do
      state}
   end
 
-  def handle_info({:bomb_dropped, {x, y}}, state) do
-    {:push, {:text, Jason.encode!(["b", x, y])}, state}
+  def handle_info({:bomb_dropped, {x, y}, blast_radius}, state) do
+    {:push, {:text, Jason.encode!(["b", x, y, blast_radius])}, state}
   end
 
   def handle_info(:send_ping, state) do

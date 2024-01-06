@@ -1,7 +1,7 @@
 defmodule Boomerman.Game do
   use GenServer
 
-  defmodule Map do
+  defmodule GameMap do
     defstruct definition: [], walls: MapSet.new(), crates: MapSet.new(), slots: []
 
     def build(map_definition) do
@@ -46,6 +46,20 @@ defmodule Boomerman.Game do
     end
   end
 
+  defmodule Player do
+    defstruct [:slot, :position, velocity: 0, direction: {0, 1}]
+
+    @tile_size 16
+
+    def new({x, y} = slot) do
+      %__MODULE__{slot: slot, position: {x * @tile_size, y * @tile_size}}
+    end
+  end
+
+  defmodule Bomb do
+    defstruct [:owner, :planted_at, :blast_radius]
+  end
+
   @map_definition [
     "[%%%%%%%%%%%%%%%%%%]",
     "@PSSCSSSSCPSSSSSSSPO",
@@ -60,7 +74,7 @@ defmodule Boomerman.Game do
     "{##################}"
   ]
 
-  @map Map.build(@map_definition)
+  @map GameMap.build(@map_definition)
 
   @type slot() :: {non_neg_integer(), non_neg_integer()}
 
@@ -70,7 +84,8 @@ defmodule Boomerman.Game do
       %{
         map: @map,
         free_slots: @map.slots,
-        busy_slots: []
+        players: %{},
+        bombs: %{}
       },
       name: __MODULE__
     )
@@ -101,7 +116,11 @@ defmodule Boomerman.Game do
   end
 
   def update(direction, velocity, position) do
-    slot = get_slot(self())
+    {:ok, slot} =
+      GenServer.call(
+        __MODULE__,
+        {:update_player, direction: direction, velocity: velocity, position: position}
+      )
 
     broadcast(
       {:player_updated,
@@ -110,8 +129,10 @@ defmodule Boomerman.Game do
     )
   end
 
-  def drop_bomb({x, y}) do
-    broadcast({:bomb_dropped, {x, y}}, self())
+  def drop_bomb({x, y}, blast_radius) do
+    :ok = GenServer.call(__MODULE__, {:drop_bomb, {x, y}, blast_radius})
+
+    broadcast({:bomb_dropped, {x, y}, blast_radius}, self())
   end
 
   @impl true
@@ -123,39 +144,92 @@ defmodule Boomerman.Game do
   end
 
   @impl true
-  def handle_call(:register, from, state) do
+  def handle_call(:register, {pid, _}, state) do
     case state.free_slots do
       [slot | slots] ->
-        broadcast({:player_joined, slot}, from)
+        broadcast({:player_joined, slot}, pid)
 
         {:reply, {:ok, {state.map.definition, slot}},
-         %{state | free_slots: slots, busy_slots: [slot | state.busy_slots]}}
+         %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(slot))}}
 
       [] ->
         {:reply, {:error, :no_slots}, state}
     end
   end
 
+  def handle_call({:update_player, props}, {pid, _}, state) do
+    if player = state.players[pid] do
+      new_player = %{
+        player
+        | direction: props[:direction],
+          velocity: props[:velocity],
+          position: props[:position]
+      }
+
+      {:reply, {:ok, player.slot}, %{state | players: Map.put(state.players, pid, new_player)}}
+    else
+      {:reply, {:error, :no_player}, state}
+    end
+  end
+
+  def handle_call({:drop_bomb, position, blast_radius}, {pid, _}, state) do
+    if state.players[pid] do
+      bomb = %Bomb{owner: pid, planted_at: System.monotonic_time(), blast_radius: blast_radius}
+
+      {:reply, :ok, %{state | bombs: Map.put(state.bombs, position, bomb)}}
+    else
+      {:reply, {:error, :no_player}, state}
+    end
+  end
+
+  @native_second System.convert_time_unit(1, :second, :native)
+
   @impl true
   def handle_info(:game_loop, state) do
     schedule_game_loop()
 
-    {:noreply, state}
+    now = System.monotonic_time()
+
+    bombs =
+      Enum.reduce(
+        state.bombs,
+        %{bombs: state.bombs, crates: state.map.crates},
+        fn {position, bomb}, acc ->
+          if abs(now - bomb.planted_at) > 3 * @native_second do
+            %{acc | bombs: Map.delete(acc.bombs, position)}
+          else
+            acc
+          end
+        end
+      )
+
+    {:noreply, %{state | bombs: bombs}}
   end
 
   def handle_info(:slot_cleanup, state) do
     schedule_slot_cleanup()
 
-    busy_slots =
+    player_pids =
       Boomerman.PlayerRegistry
       |> Registry.lookup("game")
-      |> Enum.map(&elem(&1, 1))
+      |> Enum.map(&elem(&1, 0))
+      |> MapSet.new()
 
-    freed_slots = state.busy_slots -- busy_slots
+    %{slots: slots, players: players} =
+      Enum.reduce(
+        state.players,
+        %{slots: state.free_slots, players: state.players},
+        fn {pid, player}, acc ->
+          if not MapSet.member?(player_pids, pid) do
+            broadcast({:player_left, player.slot})
+            %{acc | slots: [player.slot | acc.slots], players: Map.delete(acc.players, pid)}
+          else
+            acc
+          end
+        end
+      )
 
-    Enum.each(freed_slots, &broadcast({:player_left, &1}))
-
-    {:noreply, %{state | free_slots: state.free_slots ++ freed_slots, busy_slots: busy_slots}}
+    {:noreply, %{state | free_slots: slots, players: players}}
   end
 
   defp broadcast(message, except \\ nil) do
@@ -174,15 +248,5 @@ defmodule Boomerman.Game do
 
   defp schedule_slot_cleanup() do
     Process.send_after(self(), :slot_cleanup, 2000)
-  end
-
-  defp get_slot(pid) do
-    Boomerman.PlayerRegistry
-    |> Registry.lookup("game")
-    |> Enum.find_value(fn {player_pid, slot} ->
-      if player_pid == pid do
-        slot
-      end
-    end)
   end
 end

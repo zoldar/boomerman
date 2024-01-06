@@ -517,8 +517,8 @@
               enemy.turn(direction);
               enemy.velocity = velocity;
             } else if (!game.loading && message[0] == 'b') {
-              let [_, bombX, bombY] = message;
-              game.bombs.add(new Bomb(new Point(bombX, bombY)));
+              let [_, bombX, bombY, blastRadius] = message;
+              game.bombs.add(new Bomb(new Point(bombX * TILE_SIZE, bombY * TILE_SIZE), blastRadius));
             }
           }
         });
@@ -1002,6 +1002,7 @@
 
     class Bomb {
       position;
+      blastRadius;
       transparent = true;
       // animated by animateBombs when in burning and ignition state
       sprite = 'bomb1';
@@ -1010,8 +1011,9 @@
       explodedAt;
       boundingBox;
 
-      constructor(position) {
+      constructor(position, blastRadius) {
         this.position = position;
+        this.blastRadius = blastRadius;
         this.boundingBox = fullBoundingBox(position);
         this.droppedAt = performance.now();
       }
@@ -1023,13 +1025,13 @@
 
     function dropBomb(game) {
       let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 6 : 2;
-
       if (game.bombs.size < maxBombs) {
         let tilePosition = game.player.position.divide(TILE_SIZE).round();
-        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE));
+        let blastRadius = game.player.powerups.has(BLAST_POWERUP) ? 4 : 2;
+        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE), blastRadius);
 
         if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
-          if (game.socket) game.socket.send(JSON.stringify(["b", bomb.position.x, bomb.position.y]));
+          if (game.socket) game.socket.send(JSON.stringify(["b", tilePosition.x, tilePosition.y, blastRadius]));
           game.bombs.add(bomb);
         }
       }
@@ -1113,7 +1115,7 @@
     function createBlast(game, bomb) {
       let { player, walls, bombs, blasts, crates, enemies } = game;
 
-      let radius = player.powerups.has(BLAST_POWERUP) ? 4 : 2;
+      let radius = bomb.blastRadius;
       let blast = new Blast(bomb.position);
 
       if (detectCollisions(player, [[bomb]], 'hitBox').length > 0) {
