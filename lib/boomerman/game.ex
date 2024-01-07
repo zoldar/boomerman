@@ -108,6 +108,7 @@ defmodule Boomerman.Game do
     GenServer.start_link(
       __MODULE__,
       %{
+        game_state: :active,
         map: @map,
         free_slots: @map.slots,
         players: %{},
@@ -200,24 +201,71 @@ defmodule Boomerman.Game do
 
   @impl true
   def handle_info(:game_loop, state) do
-    schedule_game_loop()
+    if state.game_state == :active do
+      schedule_game_loop()
 
-    now = System.monotonic_time()
+      now = System.monotonic_time()
 
-    state =
-      Enum.reduce(
-        state.bombs,
-        state,
-        fn {position, bomb}, state ->
-          if abs(now - bomb.planted_at) > 3 * @native_second do
-            blast_bomb(state, position, bomb.blast_radius)
-          else
-            state
+      state =
+        Enum.reduce(
+          state.bombs,
+          state,
+          fn {position, bomb}, state ->
+            if abs(now - bomb.planted_at) > 3 * @native_second do
+              blast_bomb(state, position, bomb.blast_radius)
+            else
+              state
+            end
           end
-        end
-      )
+        )
 
-    {:noreply, state}
+      {active_players, inactive_players} =
+        Enum.split_with(state.players, fn {_, player} -> player.state == :active end)
+
+      state =
+        case {active_players, inactive_players} do
+          {[{winner_pid, _}], [_ | _]} ->
+            send(winner_pid, :game_won)
+            broadcast(:game_will_restart, winner_pid)
+            schedule_restart()
+            %{state | game_state: :inactive}
+
+          {[], [_ | _]} ->
+            broadcast(:game_will_restart)
+            schedule_restart()
+            %{state | game_state: :inactive}
+
+          _ ->
+            state
+        end
+
+      {:noreply, state}
+    else
+      {:noreply, state}
+    end
+  end
+
+  def handle_info(:restart, state) do
+    players =
+      Enum.reduce(state.players, %{}, fn {pid, player}, players ->
+        {slot_x, slot_y} = player.slot
+        position = {slot_x * @tile_size, slot_y * @tile_size}
+        Map.put(players, pid, %{player | position: position, state: :active})
+      end)
+
+    Enum.each(players, fn {pid, player} ->
+      {slot_x, slot_y} = player.slot
+
+      other_players =
+        players
+        |> Enum.map(fn {_, player} -> player end)
+        |> Enum.reject(&(&1.pid == pid))
+
+      send(pid, {:start_game, @map.definition, {slot_x, slot_y}, other_players})
+    end)
+
+    schedule_game_loop()
+    {:noreply, %{state | game_state: :active, map: @map, players: players, bombs: %{}}}
   end
 
   def handle_info(:slot_cleanup, state) do
@@ -249,7 +297,12 @@ defmodule Boomerman.Game do
   defp blast_bomb(state, {x, y} = position, blast_radius, blasted_bombs \\ MapSet.new()) do
     directions = [{0, 1}, {0, -1}, {-1, 0}, {1, 0}]
 
-    player_hitboxes = Enum.map(state.players, fn {_, player} -> Player.hitbox(player) end)
+    player_hitboxes =
+      state.players
+      |> Enum.filter(fn {_, player} -> player.state == :active end)
+      |> Enum.map(fn {_, player} -> Player.hitbox(player) end)
+
+    state = blast_players(state, {x, y}, player_hitboxes)
 
     state =
       Enum.reduce(directions, state, fn {dx, dy}, state ->
@@ -270,25 +323,30 @@ defmodule Boomerman.Game do
               {:halt, state}
 
             true ->
-              hit_pids =
-                collisions(full_hitbox({cx * @tile_size, cy * @tile_size}), player_hitboxes)
-
-              players =
-                Enum.reduce(hit_pids, state.players, fn pid, players ->
-                  if hit_player = players[pid] do
-                    broadcast({:player_blasted, hit_player.slot})
-                    Map.put(players, pid, %{hit_player | state: :eliminated})
-                  else
-                    players
-                  end
-                end)
-
-              {:cont, %{state | players: players}}
+              {:cont, blast_players(state, {cx, cy}, player_hitboxes)}
           end
         end)
       end)
 
     %{state | bombs: Map.delete(state.bombs, position)}
+  end
+
+  defp blast_players(state, {cx, cy}, player_hitboxes) do
+    hit_pids =
+      collisions(full_hitbox({cx * @tile_size, cy * @tile_size}), player_hitboxes)
+
+    players =
+      Enum.reduce(hit_pids, state.players, fn pid, players ->
+        if hit_player = players[pid] do
+          broadcast({:player_blasted, hit_player.slot}, pid)
+          send(pid, :game_lost)
+          Map.put(players, pid, %{hit_player | state: :eliminated})
+        else
+          players
+        end
+      end)
+
+    %{state | players: players}
   end
 
   defp collisions(box, other_boxes) do
@@ -324,5 +382,9 @@ defmodule Boomerman.Game do
 
   defp schedule_slot_cleanup() do
     Process.send_after(self(), :slot_cleanup, 2000)
+  end
+
+  defp schedule_restart() do
+    Process.send_after(self(), :restart, 3000)
   end
 end

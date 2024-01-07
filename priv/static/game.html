@@ -446,6 +446,7 @@
     }
 
     class Player {
+      spawnPoint;
       position;
       direction;
       velocity = 0;
@@ -456,6 +457,7 @@
       sprite = 'walk_down1';
 
       constructor(position, direction) {
+        this.spawnPoint = position;
         this.setPosition(position);
         this.turn(direction);
       }
@@ -487,6 +489,8 @@
       gameContext = gameCanvas.getContext('2d');
       bgCanvas = document.getElementById('bg-layer');
       bgContext = bgCanvas.getContext('2d');
+
+      setupControls();
 
       let game = { loading: true };
 
@@ -524,6 +528,31 @@
               game.enemies.add(new Enemy(new Point(message.x, message.y).multiply(TILE_SIZE)));
             } else if (!game.loading && message.action == 'player_left') {
               game.enemies.delete(new Enemy(new Point(message.x, message.y).multiply(TILE_SIZE)));
+            } else if (!game.loading && message.action == 'game_lost') {
+              game.state = 'lost';
+              drawLost();
+            } else if (!game.loading && message.action == 'game_won') {
+              game.loading = true;
+              game.state = 'won';
+              stopGame(game);
+              drawWon();
+            } else if (!game.loading && message.action == 'game_will_restart') {
+              game.loading = true;
+              game.state = 'will_restart';
+              stopGame(game);
+              drawWillRestart(game);
+            } else if (message.action == 'game_started') {
+              let playerPostion = new Point(message.x, message.y).multiply(TILE_SIZE);
+              let otherPlayers =
+                message.players.map(p => {
+                  return {
+                    slot: new Point(p.slot.x, p.slot.y).multiply(TILE_SIZE),
+                    position: new Point(p.position.x, p.position.y)
+                  }
+                });
+
+              game = loadGame(message.map, playerPostion, otherPlayers, socket);
+              startGame(game);
             } else if (!game.loading && message[0] == 'pu') {
               let [_, slotX, slotY, dirX, dirY, velocity, posX, posY] = message;
               let slot = new Point(slotX, slotY).multiply(TILE_SIZE);
@@ -539,10 +568,22 @@
               game.bombs.add(new Bomb(new Point(bombX * TILE_SIZE, bombY * TILE_SIZE), blastRadius));
             } else if (!game.loading && message[0] == 'bb') {
               let [_, bombX, bombY] = message;
-              console.log("Bomb blasted", bombX, bombY);
             } else if (!game.loading && message[0] == 'pb') {
               let [_, slotX, slotY] = message;
-              console.log('Player blasted', slotX, slotY);
+              let blastSlot = new Point(slotX, slotY);
+
+              if (game.player.spawnPoint.equals(blastSlot)) {
+                game.state = 'inactive';
+              }
+
+              let atEnemy = new Enemy(blastSlot);
+              if (game.enemies.has(atEnemy)) {
+                game.enemies.delete(atEnemy);
+              }
+
+              if (game.enemies.size == 0) {
+                game.state = 'inactive';
+              }
             }
           }
         });
@@ -554,15 +595,20 @@
     }
 
     function startGame(game) {
-      setupControls();
-      animatePlayer(game);
-      animateEnemies(game);
-      animateBombs(game);
+      game.playerAnimator = animatePlayer(game);
+      game.enemyAnimator = animateEnemies(game);
+      game.bombAnimator = animateBombs(game);
 
       drawBackground(game);
 
       // Start the first frame request
       window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+    }
+
+    function stopGame(game) {
+      clearInterval(game.playerAnimator);
+      clearInterval(game.enemyAnimator);
+      clearInterval(game.bombAnimator);
     }
 
     function loadGame(map, playerPosition, otherPlayers, socket) {
@@ -731,7 +777,7 @@
       let currentFrame = 0;
       let currentAnimation = 'stand_down';
 
-      setInterval(function () {
+      return setInterval(function () {
         let newAnimation = getAnimation(game.player)
 
         if (newAnimation != currentAnimation) {
@@ -749,7 +795,7 @@
       let maxFrame = 10;
       let currentFrame = 0;
 
-      setInterval(function () {
+      return setInterval(function () {
         game.enemies.forEach(enemy => {
           let animation = getAnimation(enemy);
           let frames = enemyAnimations[animation];
@@ -767,7 +813,7 @@
       let maxFrame = 4;
       let currentFrame = 0;
 
-      setInterval(function () {
+      return setInterval(function () {
         game.bombs.forEach(bomb => {
           if (bomb.state == 'burning' || bomb.state == 'ignition') {
             bomb.sprite = bombFrames[currentFrame % bombFrames.length];
@@ -784,26 +830,40 @@
     }
 
     function gameLoop(timeStamp, game) {
-      // Calculate the number of seconds passed since the last frame
-      // with a maximum of 0.1 second.
-      let secondsPassed = Math.min(0.1, (timeStamp - oldTimeStamp) / 1000);
-      oldTimeStamp = timeStamp;
+      if (!game.loading) {
+        // Calculate the number of seconds passed since the last frame
+        // with a maximum of 0.1 second.
+        let secondsPassed = Math.min(0.1, (timeStamp - oldTimeStamp) / 1000);
+        oldTimeStamp = timeStamp;
 
-      update(game, secondsPassed);
-      drawUI(game, secondsPassed);
-      drawGame(game, secondsPassed);
+        update(game, secondsPassed);
+        drawGame(game, secondsPassed);
 
-      if (game.state == 'active') {
+        if (game.state == 'lost') {
+          drawLost();
+        } else if (game.state == 'won') {
+          drawWon();
+        } else {
+          drawUI(game, secondsPassed);
+        }
+
         // Keep requesting new frames
         window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
-      } else if (game.state == 'won') {
-        drawWon(game);
-      } else {
-        drawLost(game);
       }
     }
 
     function update(game, secondsPassed, directionOverride, deltaOverride) {
+      if (game.state == 'active') {
+        updatePlayer(game, secondsPassed, directionOverride, deltaOverride);
+        updatePlayerPowerups(game);
+      }
+
+      updateEnemies(game, secondsPassed);
+      updateBombs(game);
+      updateBlasts(game);
+    }
+
+    function updatePlayer(game, secondsPassed, directionOverride, deltaOverride) {
       let { player, walls, crates, bombs, enemies } = game;
 
       let oldDirection = player.direction;
@@ -831,18 +891,6 @@
 
         dropBomb(game);
       }
-
-      let enemyObstacles;
-      if (game.socket) {
-        enemyObstacles = [walls, crates, [player]];
-      } else {
-        enemyObstacles = [walls, crates, bombs];
-      }
-
-      updatePlayerPowerups(game);
-      updateEnemies(game, secondsPassed, enemyObstacles);
-      updateBombs(game);
-      updateBlasts(game);
 
       let { direction, velocity, position } = player;
       velocity = velocity > 0 && player.powerups.has(SPEED_POWERUP) ? POWERUP_VELOCITY : velocity;
@@ -947,8 +995,15 @@
       });
     }
 
-    function updateEnemies(game, secondsPassed, obstacles) {
-      let { enemies } = game;
+    function updateEnemies(game, secondsPassed) {
+      let { enemies, walls, crates, bombs, player } = game;
+
+      let obstacles;
+      if (game.socket) {
+        obstacles = [walls, crates, [player]];
+      } else {
+        obstacles = [walls, crates, bombs];
+      }
 
       enemies.forEach(enemy => {
         if (!game.socket) {
@@ -963,50 +1018,11 @@
           let hit = hits[0];
 
           if (enemy.direction.vertical()) {
-            // colliding against obstacle
             let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
-
-
-            // sliding to the side - enemy players only
-            if (game.socket && hits.length == 1) {
-              let newX;
-              if (enemy.position.x - hit.position.x > 0) {
-                newX = Math.round(enemy.position.x) + 1;
-              } else {
-                newX = Math.round(enemy.position.x) - 1;
-              }
-
-              if (detectCollisions(enemy.atPosition(new Point(newX, hit.position.y)), obstacles).length <= 1
-                && detectCollisions(enemy.atPosition(new Point(newX, newY)), obstacles).length == 0) {
-                enemy.setPosition(new Point(newX, newY));
-              } else {
-                enemy.setPosition(new Point(enemy.position.x, newY));
-              }
-            } else {
-              enemy.setPosition(new Point(enemy.position.x, newY));
-            }
+            enemy.setPosition(new Point(enemy.position.x, newY));
           } else if (enemy.direction.horizontal()) {
-            // colliding against obstacle
             let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
-
-            // sliding to the side - enemy enemys only
-            if (game.socket && hits.length == 1) {
-              let newY;
-              if (enemy.position.y - hit.position.y > 0) {
-                newY = Math.round(enemy.position.y + (SLIDE_VELOCITY * secondsPassed));
-              } else {
-                newY = Math.round(enemy.position.y - (SLIDE_VELOCITY * secondsPassed));
-              }
-
-              if (detectCollisions(enemy.atPosition(new Point(hit.position.x, newY)), obstacles).length <= 1
-                && detectCollisions(enemy.atPosition(new Point(newX, newY)), obstacles).length == 0) {
-                enemy.setPosition(new Point(newX, newY));
-              } else {
-                enemy.setPosition(new Point(newX, enemy.position.y));
-              }
-            } else {
-              enemy.setPosition(new Point(newX, enemy.position.y));
-            }
+            enemy.setPosition(new Point(newX, enemy.position.y));
           }
 
           if (!game.socket) {
@@ -1167,7 +1183,9 @@
               blast.segments.add(createBlastSegment(position, dir, radius, radius));
               break;
             } else if (hit instanceof Player) {
-              if (!game.socket) game.state = 'lost';
+              if (!game.socket) {
+                game.state = 'lost';
+              }
               blast.segments.add(createBlastSegment(position, dir, idx, radius));
             } else {
               // wall tiles sustain any blasts
@@ -1268,12 +1286,29 @@
     }
 
     function drawLost(game) {
+      // Clear the entire canvas
+      uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+
       // Draw number to the screen
       uiContext.font = '24px pixeloid';
       uiContext.fillStyle = 'white';
       uiContext.textAlign = 'center';
       uiContext.fillText(
         "YOU LOST",
+        uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
+      );
+    }
+
+    function drawWillRestart(game) {
+      // Clear the entire canvas
+      uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+
+      // Draw number to the screen
+      uiContext.font = '24px pixeloid';
+      uiContext.fillStyle = 'white';
+      uiContext.textAlign = 'center';
+      uiContext.fillText(
+        "GAME WILL RESTART",
         uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
       );
     }
@@ -1304,7 +1339,9 @@
         drawSprite(gameContext, 'enemies', enemy.position.round(), enemy.sprite);
       });
 
-      drawSprite(gameContext, 'bombermen', game.player.position.round(), game.player.sprite);
+      if (game.state == 'active') {
+        drawSprite(gameContext, 'bombermen', game.player.position.round(), game.player.sprite);
+      }
     }
 
     function drawBackground(game) {

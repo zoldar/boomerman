@@ -96,6 +96,32 @@ defmodule BoomermanWeb.UserSocket do
     {:push, {:text, Jason.encode!(["pb", slot_x, slot_y])}, state}
   end
 
+  def handle_info(:game_lost, state) do
+    {:push, {:text, Jason.encode!(%{action: :game_lost})}, state}
+  end
+
+  def handle_info(:game_won, state) do
+    {:push, {:text, Jason.encode!(%{action: :game_won})}, state}
+  end
+
+  def handle_info(:game_will_restart, state) do
+    {:push, {:text, Jason.encode!(%{action: :game_will_restart})}, state}
+  end
+
+  def handle_info({:start_game, map, {x, y}, players}, state) do
+    players =
+      Enum.map(
+        players,
+        fn %{slot: {sx, sy}, position: {px, py}} ->
+          %{slot: %{x: sx, y: sy}, position: %{x: px, y: py}}
+        end
+      )
+
+    {:push,
+     {:text, Jason.encode!(%{action: :game_started, x: x, y: y, map: map, players: players})},
+     state}
+  end
+
   def handle_info(:send_ping, state) do
     {:push, {:text, "ping"}, state}
   end
