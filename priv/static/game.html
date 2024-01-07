@@ -1106,7 +1106,7 @@
     }
 
     function dropBomb(game) {
-      let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 6 : 2;
+      let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 4 : 2;
       if (game.bombs.toArray().filter(b => b.ownedByPlayer).length < maxBombs) {
         let tilePosition = game.player.position.divide(TILE_SIZE).round();
         let blastRadius = game.player.powerups.has(BLAST_POWERUP) ? 4 : 2;
