@@ -979,7 +979,7 @@
           // colliding against obstacle
           let newY = direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
 
-          if (detectCollisions(player.atPosition(new Point(position.x, newY)), obstacles).length == 0) {
+          if (Math.abs(newY - position.y) < TILE_SIZE && detectCollisions(player.atPosition(new Point(position.x, newY)), obstacles).length == 0) {
             player.setPosition(new Point(position.x, newY));
 
             if (hits.length == 1) {
@@ -1003,7 +1003,7 @@
           // colliding against obstacle
           let newX = direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
 
-          if (detectCollisions(player.atPosition(new Point(newX, position.y)), obstacles).length == 0) {
+          if (Math.abs(newX - position.x) < TILE_SIZE && detectCollisions(player.atPosition(new Point(newX, position.y)), obstacles).length == 0) {
             player.setPosition(new Point(newX, position.y));
 
             if (hits.length == 1) {
