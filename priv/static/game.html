@@ -829,7 +829,7 @@
         });
 
         currentFrame = (currentFrame + 1) % maxFrame;
-      }, 200);
+      }, game.socket ? 100 : 200);
     }
 
     const bombFrames = ['bomb1', 'bomb2', 'bomb3', 'bomb2'];
