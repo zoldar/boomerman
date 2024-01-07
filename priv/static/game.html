@@ -465,6 +465,10 @@
         this.direction = direction;
       }
 
+      equals(e) {
+        return e.hash() == this.hash();
+      }
+
       hash() {
         return this.spawnPoint.x + "#" + this.spawnPoint.y;
       }
@@ -974,42 +978,48 @@
         if (direction.vertical()) {
           // colliding against obstacle
           let newY = direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
-          player.setPosition(new Point(position.x, newY));
 
-          if (hits.length == 1) {
-            // sliding to the side
-            if (player.position.x - hit.position.x > 0) {
-              let delta = hit.position.x + hit.boundingBox.width - player.position.x;
+          if (detectCollisions(player.atPosition(new Point(position.x, newY)), obstacles).length == 0) {
+            player.setPosition(new Point(position.x, newY));
 
-              if (delta < hit.boundingBox.width * 0.75) {
-                update(game, secondsPassed, RIGHT, delta);
-              }
-            } else {
-              let delta = player.position.x + player.boundingBox.width - hit.position.x;
+            if (hits.length == 1) {
+              // sliding to the side
+              if (player.position.x - hit.position.x > 0) {
+                let delta = hit.position.x + hit.boundingBox.width - player.position.x;
 
-              if (delta < hit.boundingBox.width * 0.75) {
-                update(game, secondsPassed, LEFT, delta);
+                if (delta < hit.boundingBox.width * 0.75) {
+                  update(game, secondsPassed, RIGHT, delta);
+                }
+              } else {
+                let delta = player.position.x + player.boundingBox.width - hit.position.x;
+
+                if (delta < hit.boundingBox.width * 0.75) {
+                  update(game, secondsPassed, LEFT, delta);
+                }
               }
             }
           }
         } else if (direction.horizontal()) {
           // colliding against obstacle
           let newX = direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
-          player.setPosition(new Point(newX, position.y));
 
-          if (hits.length == 1) {
-            // sliding to the side
-            if (player.position.y - hit.position.y > 0) {
-              let delta = hit.position.y + hit.boundingBox.height - player.position.y;
+          if (detectCollisions(player.atPosition(new Point(newX, position.y)), obstacles).length == 0) {
+            player.setPosition(new Point(newX, position.y));
 
-              if (delta < hit.boundingBox.height * 0.75) {
-                update(game, secondsPassed, DOWN, delta);
-              }
-            } else {
-              let delta = player.position.y + player.boundingBox.height - hit.position.y;
+            if (hits.length == 1) {
+              // sliding to the side
+              if (player.position.y - hit.position.y > 0) {
+                let delta = hit.position.y + hit.boundingBox.height - player.position.y;
 
-              if (delta < hit.boundingBox.height * 0.75) {
-                update(game, secondsPassed, UP, delta);
+                if (delta < hit.boundingBox.height * 0.75) {
+                  update(game, secondsPassed, DOWN, delta);
+                }
+              } else {
+                let delta = player.position.y + player.boundingBox.height - hit.position.y;
+
+                if (delta < hit.boundingBox.height * 0.75) {
+                  update(game, secondsPassed, UP, delta);
+                }
               }
             }
           }
@@ -1048,7 +1058,8 @@
 
         enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
 
-        let hits = detectCollisions(enemy, obstacles);
+        let otherEnemies = game.socket ? enemies.toArray().filter(e => !e.equals(enemy)) : [];
+        let hits = detectCollisions(enemy, obstacles.concat([otherEnemies]));
 
         if (hits.length > 0) {
           let hit = hits[0];
