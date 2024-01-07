@@ -590,7 +590,7 @@
               enemy.velocity = velocity;
             } else if (!game.loading && message[0] == 'b') {
               let [_, bombX, bombY, blastRadius] = message;
-              game.bombs.add(new Bomb(new Point(bombX, bombY).multiply(TILE_SIZE), blastRadius));
+              game.bombs.add(new Bomb(new Point(bombX, bombY).multiply(TILE_SIZE), blastRadius, false));
             } else if (!game.loading && message[0] == 'bi') {
               let [_, bombX, bombY] = message;
               let bomb = game.bombs.get(new Point(bombX, bombY).multiply(TILE_SIZE));
@@ -611,7 +611,7 @@
                 game.state = 'inactive';
               }
 
-              let atEnemy = new Enemy(blastSlot);
+              let atEnemy = new Enemy(blastSlot.multiply(TILE_SIZE));
               if (game.enemies.has(atEnemy)) {
                 game.enemies.delete(atEnemy);
               }
@@ -1079,12 +1079,14 @@
       droppedAt;
       explodedAt;
       boundingBox;
+      ownedByPlayer;
 
-      constructor(position, blastRadius) {
+      constructor(position, blastRadius, ownedByPlayer) {
         this.position = position;
         this.blastRadius = blastRadius;
         this.boundingBox = fullBoundingBox(position);
         this.droppedAt = performance.now();
+        this.ownedByPlayer = ownedByPlayer;
       }
 
       hash() {
@@ -1094,10 +1096,10 @@
 
     function dropBomb(game) {
       let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 6 : 2;
-      if (game.bombs.size < maxBombs) {
+      if (game.bombs.toArray().filter(b => b.ownedByPlayer).length < maxBombs) {
         let tilePosition = game.player.position.divide(TILE_SIZE).round();
         let blastRadius = game.player.powerups.has(BLAST_POWERUP) ? 4 : 2;
-        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE), blastRadius);
+        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE), blastRadius, true);
 
         if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
           if (game.socket) game.socket.send(JSON.stringify(["b", tilePosition.x, tilePosition.y, blastRadius]));
