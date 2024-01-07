@@ -88,8 +88,12 @@ defmodule BoomermanWeb.UserSocket do
     {:push, {:text, Jason.encode!(["b", x, y, blast_radius])}, state}
   end
 
-  def handle_info({:bomb_blasted, {x, y}}, state) do
-    {:push, {:text, Jason.encode!(["bb", x, y])}, state}
+  def handle_info({:bomb_ignited, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["bi", x, y])}, state}
+  end
+
+  def handle_info({:crate_blasted, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["cb", x, y])}, state}
   end
 
   def handle_info({:player_blasted, {slot_x, slot_y}}, state) do

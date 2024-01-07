@@ -226,6 +226,7 @@ defmodule Boomerman.Game do
           state,
           fn {position, bomb}, state ->
             if abs(now - bomb.planted_at) > 3 * @native_second do
+              broadcast({:bomb_ignited, position})
               blast_bomb(state, position, bomb.blast_radius)
             else
               state
@@ -362,12 +363,13 @@ defmodule Boomerman.Game do
 
           cond do
             bomb = not MapSet.member?(blasted_bombs, {cx, cy}) && state.bombs[{cx, cy}] ->
-              broadcast({:bomb_blasted, {cx, cy}})
+              broadcast({:bomb_ignited, {cx, cy}})
 
               {:halt,
                blast_bomb(state, {cx, cy}, bomb.blast_radius, MapSet.put(blasted_bombs, position))}
 
             MapSet.member?(state.map.crates, {cx, cy}) ->
+              broadcast({:crate_blasted, {cx, cy}})
               {:halt, %{state | map: GameMap.remove_crate(state.map, {cx, cy})}}
 
             MapSet.member?(state.map.walls, {cx, cy}) ->

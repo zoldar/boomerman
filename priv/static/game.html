@@ -226,6 +226,7 @@
       position;
       sprite;
       boundingBox;
+      visible = true;
 
       constructor(position, sprite) {
         this.position = position;
@@ -589,9 +590,19 @@
               enemy.velocity = velocity;
             } else if (!game.loading && message[0] == 'b') {
               let [_, bombX, bombY, blastRadius] = message;
-              game.bombs.add(new Bomb(new Point(bombX * TILE_SIZE, bombY * TILE_SIZE), blastRadius));
-            } else if (!game.loading && message[0] == 'bb') {
+              game.bombs.add(new Bomb(new Point(bombX, bombY).multiply(TILE_SIZE), blastRadius));
+            } else if (!game.loading && message[0] == 'bi') {
               let [_, bombX, bombY] = message;
+              let bomb = game.bombs.get(new Point(bombX, bombY).multiply(TILE_SIZE));
+              if (bomb) {
+                bomb.state = 'ignition';
+              }
+            } else if (!game.loading && message[0] == 'cb') {
+              let [_, crateX, crateY] = message;
+              let crate = game.crates.get(new Point(crateX, crateY).multiply(TILE_SIZE));
+              if (crate) {
+                crate.visible = false;
+              }
             } else if (!game.loading && message[0] == 'pb') {
               let [_, slotX, slotY] = message;
               let blastSlot = new Point(slotX, slotY);
@@ -1108,7 +1119,7 @@
           }
         }
 
-        if (bomb.state == 'burning' && timePassed >= 3) {
+        if (!game.socket && bomb.state == 'burning' && timePassed >= 3) {
           bomb.state = 'ignition';
         } else if (bomb.state == 'ignition') {
           bomb.state = 'exploding';
@@ -1188,7 +1199,7 @@
           if (hits.length > 0) {
             let hit = hits[0];
 
-            if (hit instanceof Bomb && hit.state == 'burning') {
+            if (!game.socket && hit instanceof Bomb && hit.state == 'burning') {
               hit.state = 'ignition';
               break;
             } else if (hit instanceof Enemy) {
@@ -1343,7 +1354,9 @@
       gameContext.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
 
       game.crates.forEach(crate => {
-        drawSprite(gameContext, 'map', crate.position, crate.sprite);
+        if (crate.visible) {
+          drawSprite(gameContext, 'map', crate.position, crate.sprite);
+        }
       })
 
       game.powerups.forEach(powerup => {
