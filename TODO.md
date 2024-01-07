@@ -1,9 +1,19 @@
 # TODO
 
-* [ ] limit number of bombs dropped at any time (bombs will have to be "owned")
-* [ ] add powerup boosting number of bombs (sprite and icon)
-* [ ] add powerup boosting bomb damage (sprite and icon)
-* [ ] add powerup boosting walking speed (sprite and icon)
-* [ ] add surprise powerup adding either any of the above or crippling steering or removing already gained powerups (sprite and icon)
-* [ ] fix janky collisions detection
+* [ ] smaller bomb bounding box (hit box remains full)
+* [ ] implement powerup spawning and collecting in multiplayer
+* [ ] set time limit constraint on a single match
+* [ ] improve render order of tall sprites
+* [ ] better UI screens using normal HTML/CSS instead of canvas due to blurry font rendering
+* [ ] dedicated menu screen
+* [ ] ability to restart single player game
+* [ ] implement dying animation for player and player enemies
+* [ ] better touch controls
+* [ ] respawns + frag count
+* [ ] respawning crates
 * [ ] split enemy players from enemies
+* [ ] lag compensation
+* [ ] leaderboard
+* [ ] implement NPC enemies in multiplayer?
+* [ ] sounds?
+* [ ] custom artwork?
