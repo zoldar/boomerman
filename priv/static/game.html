@@ -977,7 +977,12 @@
 
         if (direction.vertical()) {
           // colliding against obstacle
-          let newY = direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
+          let newY;
+          if (direction.y > 0) {
+            newY = hit.boundingBox.position.y - player.boundingBox.height;
+          } else {
+            newY = hit.boundingBox.position.y + hit.boundingBox.height;
+          }
 
           if (Math.abs(newY - position.y) < TILE_SIZE && detectCollisions(player.atPosition(new Point(position.x, newY)), obstacles).length == 0) {
             player.setPosition(new Point(position.x, newY));
@@ -1001,7 +1006,12 @@
           }
         } else if (direction.horizontal()) {
           // colliding against obstacle
-          let newX = direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
+          let newX;
+          if (direction.x > 0) {
+            newX = hit.boundingBox.position.x - player.boundingBox.width;
+          } else {
+            newX = hit.boundingBox.position.x + hit.boundingBox.width;
+          }
 
           if (Math.abs(newX - position.x) < TILE_SIZE && detectCollisions(player.atPosition(new Point(newX, position.y)), obstacles).length == 0) {
             player.setPosition(new Point(newX, position.y));
@@ -1065,10 +1075,22 @@
           let hit = hits[0];
 
           if (enemy.direction.vertical()) {
-            let newY = enemy.direction.y > 0 ? hit.position.y - TILE_SIZE : hit.position.y + TILE_SIZE;
+            let newY;
+            if (enemy.direction.y > 0) {
+              newY = hit.boundingBox.position.y - enemy.boundingBox.height;
+            } else {
+              newY = hit.boundingBox.position.y + hit.boundingBox.height;
+            }
+
             enemy.setPosition(new Point(enemy.position.x, newY));
           } else if (enemy.direction.horizontal()) {
-            let newX = enemy.direction.x > 0 ? hit.position.x - TILE_SIZE : hit.position.x + TILE_SIZE;
+            let newX;
+            if (enemy.direction.x > 0) {
+              newX = hit.boundingBox.position.x - enemy.boundingBox.width;
+            } else {
+              newX = hit.boundingBox.position.x + hit.boundingBox.width;
+            }
+
             enemy.setPosition(new Point(newX, enemy.position.y));
           }
 
@@ -1090,12 +1112,14 @@
       droppedAt;
       explodedAt;
       boundingBox;
+      hitBox;
       ownedByPlayer;
 
       constructor(position, blastRadius, ownedByPlayer) {
         this.position = position;
         this.blastRadius = blastRadius;
-        this.boundingBox = fullBoundingBox(position);
+        this.boundingBox = smallBoundingBox(position);
+        this.hitBox = fullBoundingBox(position);
         this.droppedAt = performance.now();
         this.ownedByPlayer = ownedByPlayer;
       }
