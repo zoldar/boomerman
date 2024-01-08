@@ -84,7 +84,16 @@ defmodule Boomerman.Game do
       }
     end
 
-    def hitbox(%{pid: pid, position: {px, py}}) do
+    def bounding_box(%{pid: pid, position: {px, py}}) do
+      %{
+        key: pid,
+        position: {px, py},
+        width: @tile_size,
+        height: @tile_size
+      }
+    end
+
+    def hit_box(%{pid: pid, position: {px, py}}) do
       %{
         key: pid,
         position: {px + @tile_size / 3, py + @tile_size / 3},
@@ -237,15 +246,15 @@ defmodule Boomerman.Game do
       {active_players, inactive_players} =
         Enum.split_with(state.players, fn {_, player} -> player.state == :active end)
 
-      player_hitboxes =
+      player_boxes =
         state.players
         |> Enum.filter(fn {_, player} -> player.state == :active end)
-        |> Enum.map(fn {_, player} -> Player.hitbox(player) end)
+        |> Enum.map(fn {_, player} -> Player.bounding_box(player) end)
 
-      bomb_hitboxes = Enum.map(state.bombs, fn {position, _} -> full_hitbox(position) end)
-      wall_hitboxes = Enum.map(state.map.walls, &full_hitbox/1)
-      crate_hitboxes = Enum.map(state.map.crates, &full_hitbox/1)
-      static_hitboxes = List.flatten([bomb_hitboxes, wall_hitboxes, crate_hitboxes])
+      bomb_boxes = Enum.map(state.bombs, fn {position, _} -> small_box(position) end)
+      wall_boxes = Enum.map(state.map.walls, &full_box/1)
+      crate_boxes = Enum.map(state.map.crates, &full_box/1)
+      static_boxes = List.flatten([bomb_boxes, wall_boxes, crate_boxes])
 
       state =
         Enum.reduce(active_players, state, fn {pid, player}, state ->
@@ -257,9 +266,9 @@ defmodule Boomerman.Game do
           new_position = {px + dx * delta, py + dy * delta}
           new_player = %{player | position: new_position, updated_at: now}
 
-          player_hitboxes = Enum.reject(player_hitboxes, &(&1.key == pid))
+          player_boxes = Enum.reject(player_boxes, &(&1.key == pid))
 
-          case collisions(Player.hitbox(new_player), player_hitboxes ++ static_hitboxes) do
+          case collisions(Player.bounding_box(new_player), player_boxes ++ static_boxes) do
             [_ | _] ->
               state
 
@@ -352,7 +361,7 @@ defmodule Boomerman.Game do
     player_hitboxes =
       state.players
       |> Enum.filter(fn {_, player} -> player.state == :active end)
-      |> Enum.map(fn {_, player} -> Player.hitbox(player) end)
+      |> Enum.map(fn {_, player} -> Player.hit_box(player) end)
 
     state = blast_players(state, {x, y}, player_hitboxes)
 
@@ -386,7 +395,7 @@ defmodule Boomerman.Game do
 
   defp blast_players(state, {cx, cy}, player_hitboxes) do
     hit_pids =
-      collisions(full_hitbox({cx * @tile_size, cy * @tile_size}), player_hitboxes)
+      collisions(full_box({cx * @tile_size, cy * @tile_size}), player_hitboxes)
 
     players =
       Enum.reduce(hit_pids, state.players, fn pid, players ->
@@ -415,8 +424,16 @@ defmodule Boomerman.Game do
     x1 < x2 + w2 and x1 + w1 > x2 and y1 < y2 + h2 and y1 + h1 > y2
   end
 
-  defp full_hitbox(position) do
+  defp full_box(position) do
     %{position: position, width: @tile_size, height: @tile_size, key: :none}
+  end
+
+  defp small_box({px, py}) do
+    %{
+      position: {px + @tile_size / 3, py + @tile_size / 3},
+      width: @tile_size / 3,
+      height: @tile_size / 3
+    }
   end
 
   defp broadcast(message, except \\ nil) do
