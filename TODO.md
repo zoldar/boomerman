@@ -1,6 +1,6 @@
 # TODO
 
-* [ ] smaller bomb bounding box (hit box remains full)
+* [x] smaller bomb bounding box (hit box remains full)
 * [ ] implement powerup spawning and collecting in multiplayer
 * [ ] set time limit constraint on a single match
 * [ ] improve render order of tall sprites
