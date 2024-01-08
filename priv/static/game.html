@@ -869,26 +869,32 @@
       return velocityStr + '_' + direction.directionName();
     }
 
-    function gameLoop(timeStamp, game) {
+    function gameLoop(timeStamp, game, secondsPassed) {
       if (!game.loading) {
-        // Calculate the number of seconds passed since the last frame
-        // with a maximum of 0.1 second.
-        let secondsPassed = Math.min(0.1, (timeStamp - oldTimeStamp) / 1000);
+        secondsPassed = (secondsPassed || 0) + (timeStamp - oldTimeStamp) / 1000;
         oldTimeStamp = timeStamp;
 
-        update(game, secondsPassed);
-        drawGame(game, secondsPassed);
+        if (secondsPassed >= 1 / 30) {
+          secondsPassed = Math.min(0.1, secondsPassed);
+          // Calculate the number of seconds passed since the last frame
+          // with a maximum of 0.1 second.
 
-        if (game.state == 'lost') {
-          drawLost();
-        } else if (game.state == 'won') {
-          drawWon();
-        } else {
-          drawUI(game, secondsPassed);
+          update(game, secondsPassed);
+          drawGame(game, secondsPassed);
+
+          if (game.state == 'lost') {
+            drawLost();
+          } else if (game.state == 'won') {
+            drawWon();
+          } else {
+            drawUI(game, secondsPassed);
+          }
+
+          secondsPassed = 0;
         }
 
         // Keep requesting new frames
-        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game, secondsPassed));
       }
     }
 
