@@ -925,7 +925,7 @@
       let oldPosition = player.position;
 
       if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
-        player.velocity = PLAYER_VELOCITY;
+        player.velocity = player.powerups.has(SPEED_POWERUP) ? POWERUP_VELOCITY : PLAYER_VELOCITY;
 
         if (!directionOverride) {
           if (keys.ArrowUp) player.turn(UP);
@@ -947,7 +947,6 @@
       }
 
       let { direction, velocity, position } = player;
-      velocity = velocity > 0 && player.powerups.has(SPEED_POWERUP) ? POWERUP_VELOCITY : velocity;
       let delta = velocity * secondsPassed;
       delta = deltaOverride && deltaOverride < delta ? deltaOverride : delta;
       player.setPosition(position.add(direction.multiply(delta)));
