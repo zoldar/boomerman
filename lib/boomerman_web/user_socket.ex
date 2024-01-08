@@ -62,6 +62,14 @@ defmodule BoomermanWeb.UserSocket do
     {:ok, state}
   end
 
+  def handle_in({"[\"cp\"" <> _ = message, _opts}, state) do
+    [_, x, y] = Jason.decode!(message)
+
+    Game.collect_powerup({x, y})
+
+    {:ok, state}
+  end
+
   def handle_info({:player_joined, {x, y}}, state) do
     {:push, {:text, Jason.encode!(%{action: :player_joined, x: x, y: y})}, state}
   end
@@ -94,6 +102,18 @@ defmodule BoomermanWeb.UserSocket do
 
   def handle_info({:crate_blasted, {x, y}}, state) do
     {:push, {:text, Jason.encode!(["cb", x, y])}, state}
+  end
+
+  def handle_info({:powerup_spawned, powerup, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["ps", powerup, x, y])}, state}
+  end
+
+  def handle_info({:powerup_collected, powerup, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["pc", powerup, x, y])}, state}
+  end
+
+  def handle_info({:powerup_grabbed, {x, y}}, state) do
+    {:push, {:text, Jason.encode!(["pg", x, y])}, state}
   end
 
   def handle_info({:player_blasted, {slot_x, slot_y}}, state) do

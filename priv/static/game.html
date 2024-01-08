@@ -607,6 +607,20 @@
               if (crate) {
                 crate.visible = false;
               }
+            } else if (!game.loading && message[0] == 'ps') {
+              let [_, powerup, slotX, slotY] = message;
+              game.powerups.add(new Powerup(powerup, new Point(slotX, slotY).multiply(TILE_SIZE)));
+            } else if (!game.loading && message[0] == 'pc') {
+              let [_, powerup, slotX, slotY] = message;
+              if (powerup == 'clear') {
+                game.player.powerups.clear();
+              } else {
+                game.player.powerups.add(new PowerupIcon(powerup));
+              }
+              game.powerups.delete(new Point(slotX, slotY).multiply(TILE_SIZE));
+            } else if (!game.loading && message[0] == 'pg') {
+              let [_, slotX, slotY] = message;
+              game.powerups.delete(new Point(slotX, slotY).multiply(TILE_SIZE));
             } else if (!game.loading && message[0] == 'pb') {
               let [_, slotX, slotY] = message;
               let blastSlot = new Point(slotX, slotY);
@@ -956,18 +970,22 @@
       if (powerupHits.length > 0) {
         let hit = powerupHits[0];
 
-        if (hit.type == 'surprise') {
-          let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
-          if (type == 'clear') {
-            player.powerups.clear();
-          } else {
-            player.powerups.add(new PowerupIcon(type));
-          }
+        if (game.socket) {
+          let tilePosition = hit.position.divide(TILE_SIZE);
+          game.socket.send(JSON.stringify(['cp', tilePosition.x, tilePosition.y]));
         } else {
-          player.powerups.add(hit.icon());
+          if (hit.type == 'surprise') {
+            let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
+            if (type == 'clear') {
+              player.powerups.clear();
+            } else {
+              player.powerups.add(new PowerupIcon(type));
+            }
+          } else {
+            player.powerups.add(hit.icon());
+          }
+          game.powerups.delete(hit);
         }
-
-        game.powerups.delete(hit);
       }
 
       let hits = detectCollisions(player, obstacles);

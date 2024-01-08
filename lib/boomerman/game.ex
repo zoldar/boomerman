@@ -2,7 +2,14 @@ defmodule Boomerman.Game do
   use GenServer
 
   defmodule GameMap do
-    defstruct definition: [], walls: MapSet.new(), crates: MapSet.new(), slots: []
+    defstruct [
+      :width,
+      :height,
+      definition: [],
+      walls: MapSet.new(),
+      crates: MapSet.new(),
+      slots: []
+    ]
 
     def build(map_definition) do
       plain_definition = Enum.map(map_definition, &String.replace(&1, "P", "G"))
@@ -42,7 +49,12 @@ defmodule Boomerman.Game do
           end)
         end)
 
-      %{struct | definition: plain_definition}
+      %{
+        struct
+        | definition: plain_definition,
+          width: String.length(hd(plain_definition)),
+          height: length(plain_definition)
+      }
     end
 
     def remove_crate(map, {cx, cy}) do
@@ -123,6 +135,7 @@ defmodule Boomerman.Game do
 
   @map GameMap.build(@map_definition)
   @tile_size 16
+  @powerups [:bomb, :blast, :speed, :surprise]
 
   @type slot() :: {non_neg_integer(), non_neg_integer()}
 
@@ -134,7 +147,8 @@ defmodule Boomerman.Game do
         map: @map,
         free_slots: @map.slots,
         players: %{},
-        bombs: %{}
+        bombs: %{},
+        powerups: %{}
       },
       name: __MODULE__
     )
@@ -170,6 +184,10 @@ defmodule Boomerman.Game do
     :ok = GenServer.call(__MODULE__, {:drop_bomb, {x, y}, blast_radius})
 
     broadcast({:bomb_dropped, {x, y}, blast_radius}, self())
+  end
+
+  def collect_powerup({x, y}) do
+    :ok = GenServer.call(__MODULE__, {:collect_powerup, {x, y}})
   end
 
   @impl true
@@ -215,6 +233,28 @@ defmodule Boomerman.Game do
       bomb = %Bomb{owner: pid, planted_at: System.monotonic_time(), blast_radius: blast_radius}
 
       {:reply, :ok, %{state | bombs: Map.put(state.bombs, position, bomb)}}
+    else
+      {:reply, {:error, :no_player}, state}
+    end
+  end
+
+  def handle_call({:collect_powerup, position}, {pid, _}, state) do
+    if state.players[pid] do
+      if powerup = state.powerups[position] do
+        final_powerup =
+          if powerup == :surprise do
+            Enum.random([:clear, :bomb, :blast, :speed])
+          else
+            powerup
+          end
+
+        send(pid, {:powerup_collected, final_powerup, position})
+        broadcast({:powerup_grabbed, position}, pid)
+
+        {:reply, :ok, %{state | powerups: Map.delete(state.powerups, position)}}
+      else
+        {:reply, :ok, state}
+      end
     else
       {:reply, {:error, :no_player}, state}
     end
@@ -379,6 +419,7 @@ defmodule Boomerman.Game do
 
             MapSet.member?(state.map.crates, {cx, cy}) ->
               broadcast({:crate_blasted, {cx, cy}})
+              state = maybe_spawn_powerup(state, {cx, cy})
               {:halt, %{state | map: GameMap.remove_crate(state.map, {cx, cy})}}
 
             MapSet.member?(state.map.walls, {cx, cy}) ->
@@ -391,6 +432,16 @@ defmodule Boomerman.Game do
       end)
 
     %{state | bombs: Map.delete(state.bombs, position)}
+  end
+
+  defp maybe_spawn_powerup(state, {x, y}) do
+    if Enum.random(1..2) == 2 and map_size(state.powerups) < 5 do
+      powerup = Enum.random(@powerups)
+      broadcast({:powerup_spawned, powerup, {x, y}})
+      %{state | powerups: Map.put(state.powerups, {x, y}, powerup)}
+    else
+      state
+    end
   end
 
   defp blast_players(state, {cx, cy}, player_hitboxes) do
