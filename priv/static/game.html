@@ -876,6 +876,9 @@
         let secondsPassed = Math.min(0.1, (timeStamp - oldTimeStamp) / 1000);
         oldTimeStamp = timeStamp;
 
+        // Keep requesting new frames
+        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+
         update(game, secondsPassed);
         drawGame(game, secondsPassed);
 
@@ -886,9 +889,6 @@
         } else {
           drawUI(game, secondsPassed);
         }
-
-        // Keep requesting new frames
-        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
       }
     }
 
