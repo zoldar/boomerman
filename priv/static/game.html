@@ -1427,14 +1427,22 @@
         });
       });
 
+      let tallSprites = [];
+
       game.enemies.forEach(enemy => {
         let enemySheet = game.socket ? 'bombermen' : 'enemies';
-        drawSprite(gameContext, enemySheet, enemy.position.round(), enemy.sprite);
+        tallSprites.push({ position: enemy.position.round(), sheet: enemySheet, sprite: enemy.sprite });
       });
 
       if (game.state == 'active') {
-        drawSprite(gameContext, 'bombermen', game.player.position.round(), game.player.sprite);
+        tallSprites.push({ position: game.player.position.round(), sheet: 'bombermen', sprite: game.player.sprite });
       }
+
+      tallSprites.sort((s1, s2) => s1.position.y > s2.position.y ? 1 : -1);
+
+      tallSprites.forEach(s => {
+        drawSprite(gameContext, s.sheet, s.position, s.sprite);
+      });
     }
 
     function drawBackground(game) {

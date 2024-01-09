@@ -2,7 +2,7 @@
 
 * [x] smaller bomb bounding box (hit box remains full)
 * [x] implement powerup spawning and collecting in multiplayer
-* [ ] improve render order of tall sprites
+* [x] improve render order of tall sprites
 * [ ] set time limit constraint on a single match
 * [ ] respawns + frag count
 * [ ] respawning crates
@@ -12,8 +12,8 @@
 * [ ] ability to restart single player game
 * [ ] implement dying animation for player and player enemies
 * [ ] better touch controls
-* [ ] split enemy players from enemies
 * [ ] lag compensation
+* [ ] split enemy players from enemies
 * [ ] implement NPC enemies in multiplayer?
 * [ ] sounds?
 * [ ] custom artwork?
