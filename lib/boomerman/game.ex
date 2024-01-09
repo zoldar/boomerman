@@ -481,6 +481,7 @@ defmodule Boomerman.Game do
 
   defp small_box({px, py}) do
     %{
+      key: :none,
       position: {px + @tile_size / 3, py + @tile_size / 3},
       width: @tile_size / 3,
       height: @tile_size / 3
