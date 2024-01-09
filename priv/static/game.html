@@ -27,7 +27,6 @@
     }
 
     #stage {
-      font-family: pixeloid;
       width: 100%;
       border: 1px solid lightgrey;
     }
@@ -54,12 +53,13 @@
     }
 
     #menu {
-      font-family: courier new, mono;
+      font-family: pixeloid, courier new, mono;
       font-size: x-large;
       position: fixed;
       bottom: 0.2rem;
       right: 0.2rem;
       z-index: 4;
+      color: white;
     }
 
     #menu a {
@@ -69,6 +69,7 @@
 </head>
 
 <body>
+  <img alt="Letter Spritesheet" class="sheet" id="letter-sheet" src="images/sharp-retro.png">
   <img alt="City Spritesheet" class="sheet" id="city-sheet" src="images/city.png">
   <img alt="Bombermen Spritesheet" class="sheet" , id="bombermen-sheet" src="images/bombermen.png">
   <img alt="Enemies Spritesheet" class="sheet" id="enemies-sheet" src="images/enemies.png">
@@ -80,9 +81,9 @@
     <canvas id="bg-layer" width="320" height="200"></canvas>
   </div>
   <div id="menu">
-    <a href="?multi">Multiplayer</a>
-
-    <a href="?single">Singleplayer</a>
+    <a href="?multi">MULTIPLAYER</a>
+    |
+    <a href="?single">SINGLE PLAYER</a>
   </div>
 
   <script>
@@ -247,6 +248,8 @@
     let gameContext;
     let oldTimeStamp = 0;
     let keys = {}
+
+    const letterSheet = document.getElementById('letter-sheet');
 
     const mapSheet = {
       height: 16,
@@ -1342,9 +1345,7 @@
       uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
       // Draw number to the screen
-      uiContext.font = '8px pixeloid';
-      uiContext.fillStyle = 'white';
-      uiContext.fillText("FPS: " + fps, 4, 10);
+      drawText(4, 0, 'FPS: ' + fps);
 
       let now = performance.now();
 
@@ -1365,41 +1366,37 @@
     }
 
     function drawWon(game) {
-      // Draw number to the screen
-      uiContext.font = '24px pixeloid';
-      uiContext.fillStyle = 'white';
-      uiContext.textAlign = 'center';
-      uiContext.fillText(
-        "YOU WON!",
-        uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
+      drawText(
+        0, 0, 'YOU WON',
+        {
+          align: 'vcenter hcenter',
+          border: { color: 'white', background: 'green' }
+        }
       );
     }
 
     function drawLost(game) {
-      // Clear the entire canvas
       uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
       // Draw number to the screen
-      uiContext.font = '24px pixeloid';
-      uiContext.fillStyle = 'white';
-      uiContext.textAlign = 'center';
-      uiContext.fillText(
-        "YOU LOST",
-        uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
+      drawText(
+        0, 0, 'YOU LOST',
+        {
+          align: 'vcenter hcenter',
+          border: { color: 'white', background: 'orange' }
+        }
       );
     }
 
     function drawWillRestart(game) {
-      // Clear the entire canvas
       uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
 
-      // Draw number to the screen
-      uiContext.font = '24px pixeloid';
-      uiContext.fillStyle = 'white';
-      uiContext.textAlign = 'center';
-      uiContext.fillText(
-        "GAME WILL RESTART",
-        uiCanvas.width / 2, (uiCanvas.height / 2) + (parseInt(uiContext.font) / 4)
+      drawText(
+        0, 0, 'GAME WILL RESTART',
+        {
+          align: 'vcenter hcenter',
+          border: { color: 'white', background: 'orange' }
+        }
       );
     }
 
@@ -1471,6 +1468,83 @@
         TILE_SIZE,
         (TILE_SIZE + verticalOffset)
       );
+    }
+
+    const LETTER_WIDTH = 8;
+    const LETTER_HEIGHT = 16;
+
+    const textMap = {};
+    ' !"#$% \'()*+,-./0123456789:;<=>?'.split('').forEach((letter, idx) => {
+      textMap[letter] = [idx * LETTER_WIDTH, LETTER_HEIGHT];
+    });
+    '@abcdefghijklmnopqrstuvwxyz[\\]'.split('').forEach((letter, idx) => {
+      textMap[letter] = [idx * LETTER_WIDTH, LETTER_HEIGHT * 2];
+    });
+
+    function drawText(x, y, inText, options) {
+      options = options || {};
+      let text = inText.toLowerCase();
+      let realX, realY;
+      if (options.align && options.align.indexOf('vcenter') > -1) {
+        realY = (uiCanvas.height / 2) - (LETTER_HEIGHT / 2) + y;
+      } else if (options.align && options.align.indexOf('vbottom')) {
+        realY = uiCanvas.height - LETTER_HEIGHT + y;
+      }
+
+      if (options.align && options.align.indexOf('hcenter')) {
+        realX = (uiCanvas.width / 2) - (text.length * LETTER_WIDTH / 2) + x;
+      } else if (options.align && options.align.indexOf('hright')) {
+        realX = uiCanvas.width - (text.length * LETTER_WIDTH) + x;
+      }
+
+
+      realX = realX || x;
+      realY = realY || y;
+
+      if (options.border) {
+        let borderRadius = options.border.radius || 5;
+
+        uiContext.fillStyle = options.border.background || 'black';
+        uiContext.beginPath();
+        uiContext.roundRect(
+          realX - 10,
+          realY - 5,
+          text.length * LETTER_WIDTH + 20,
+          LETTER_HEIGHT + 10,
+          borderRadius
+        );
+        uiContext.fill();
+
+        if (options.border.color) {
+          uiContext.strokeStyle = options.border.color;
+          uiContext.lineWidth = options.border.size || 2;
+          uiContext.beginPath();
+          uiContext.roundRect(
+            realX - 10,
+            realY - 5,
+            text.length * LETTER_WIDTH + 20,
+            LETTER_HEIGHT + 10,
+            borderRadius
+          );
+          uiContext.stroke();
+        }
+      }
+
+      text.split('').forEach((letter, idx) => {
+        let [sx, sy] = textMap[letter];
+
+        uiContext.drawImage(
+          letterSheet,
+          sx,
+          sy,
+          LETTER_WIDTH,
+          LETTER_HEIGHT,
+          realX + (idx * LETTER_WIDTH),
+          realY,
+          LETTER_WIDTH,
+          LETTER_HEIGHT
+        );
+      });
     }
   </script>
 </body>
