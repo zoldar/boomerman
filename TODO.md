@@ -7,7 +7,6 @@
 * [ ] respawns + frag count
 * [ ] respawning crates
 * [ ] leaderboard
-* [ ] better UI screens using normal HTML/CSS instead of canvas due to blurry font rendering
 * [ ] dedicated menu screen
 * [ ] ability to restart single player game
 * [ ] implement dying animation for player and player enemies
