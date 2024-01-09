@@ -656,6 +656,7 @@
       game.bombAnimator = animateBombs(game);
 
       drawBackground(game);
+      clearCenterBanner();
 
       // Start the first frame request
       window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
@@ -1341,8 +1342,8 @@
       // Calculate fps
       let fps = Math.round(1 / secondsPassed);
 
-      // Clear the entire canvas
-      uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
+      // Clear the top part of canvas
+      uiContext.clearRect(0, 0, uiCanvas.width, 24);
 
       // Draw number to the screen
       drawText(4, 0, 'FPS: ' + fps);
@@ -1365,37 +1366,30 @@
       });
     }
 
-    function drawWon(game) {
+    function clearCenterBanner() {
+      uiContext.clearRect(0, 24, uiCanvas.width, uiCanvas.height - 48);
+    }
+
+    function drawWon() {
+      drawCenterBanner("YOU WON!", "green");
+    }
+
+    function drawLost() {
+      drawCenterBanner("YOU LOST", "orange");
+    }
+
+    function drawWillRestart() {
+      drawCenterBanner("GAME WILL RESTART", "orange");
+    }
+
+    function drawCenterBanner(text, background) {
+      uiContext.clearRect(0, 24, uiCanvas.width, uiCanvas.height - 48);
+
       drawText(
-        0, 0, 'YOU WON',
+        0, 0, text,
         {
           align: 'vcenter hcenter',
           border: { color: 'white', background: 'green' }
-        }
-      );
-    }
-
-    function drawLost(game) {
-      uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
-
-      // Draw number to the screen
-      drawText(
-        0, 0, 'YOU LOST',
-        {
-          align: 'vcenter hcenter',
-          border: { color: 'white', background: 'orange' }
-        }
-      );
-    }
-
-    function drawWillRestart(game) {
-      uiContext.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
-
-      drawText(
-        0, 0, 'GAME WILL RESTART',
-        {
-          align: 'vcenter hcenter',
-          border: { color: 'white', background: 'orange' }
         }
       );
     }
