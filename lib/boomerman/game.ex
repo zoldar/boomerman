@@ -446,7 +446,7 @@ defmodule Boomerman.Game do
 
   defp blast_players(state, {cx, cy}, player_hitboxes) do
     hit_pids =
-      collisions(full_box({cx * @tile_size, cy * @tile_size}), player_hitboxes)
+      collisions(full_box({cx, cy}), player_hitboxes)
 
     players =
       Enum.reduce(hit_pids, state.players, fn pid, players ->
@@ -475,14 +475,19 @@ defmodule Boomerman.Game do
     x1 < x2 + w2 and x1 + w1 > x2 and y1 < y2 + h2 and y1 + h1 > y2
   end
 
-  defp full_box(position) do
-    %{position: position, width: @tile_size, height: @tile_size, key: :none}
+  defp full_box({px, py}) do
+    %{
+      position: {px * @tile_size, py * @tile_size},
+      width: @tile_size,
+      height: @tile_size,
+      key: :none
+    }
   end
 
   defp small_box({px, py}) do
     %{
       key: :none,
-      position: {px + @tile_size / 3, py + @tile_size / 3},
+      position: {px * @tile_size + @tile_size / 3, py * @tile_size + @tile_size / 3},
       width: @tile_size / 3,
       height: @tile_size / 3
     }
