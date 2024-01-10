@@ -658,6 +658,8 @@
       drawBackground(game);
       clearCenterBanner();
 
+      game.startedAt = performance.now();
+
       // Start the first frame request
       window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
     }
@@ -702,7 +704,9 @@
         enemies: enemies,
         bombs: new HashSet(),
         blasts: new HashSet(),
-        powerups: new HashSet()
+        powerups: new HashSet(),
+        startedAt: null,
+        timeLimitSeconds: 120
       }
     }
 
@@ -904,6 +908,8 @@
           drawLost();
         } else if (game.state == 'won') {
           drawWon();
+        } else if (game.state == 'timeout') {
+          drawTimeout();
         } else {
           drawUI(game, secondsPassed);
         }
@@ -911,6 +917,10 @@
     }
 
     function update(game, secondsPassed, directionOverride, deltaOverride) {
+      if (performance.now() - game.startedAt > game.timeLimitSeconds * 1000) {
+        game.state = 'timeout';
+      }
+
       if (game.state == 'active') {
         updatePlayer(game, secondsPassed, directionOverride, deltaOverride);
         updatePlayerPowerups(game);
@@ -1350,15 +1360,33 @@
 
       let now = performance.now();
 
+      // Draw game timer
+      let gameDuration = Math.round((now - game.startedAt) / 1000);
+      let secondsLeft = game.timeLimitSeconds - gameDuration;
+      let timerText;
+      if (secondsLeft > 0) {
+        let minuteText = `${Math.floor(secondsLeft / 60)}`.padStart(2, ' ');
+        let secondText = `${secondsLeft % 60}`.padStart(2, '0');
+        timerText = minuteText + ':' + secondText;
+      } else {
+        timerText = '00:00';
+      }
+
+      let flickerState = Math.sin(((now - game.startedAt) / 250) * Math.PI) > 0;
+      if (secondsLeft > 10 || secondsLeft <= 0 || (secondsLeft <= 10 && flickerState)) {
+        drawText(0, 0, timerText, { align: ['hcenter'] });
+      }
+
       game.player.powerups.forEach((powerup, idx) => {
-        let powerupTimeRatio = ((now - powerup.collectedAt) / 1000) / POWERUP_SECONDS;
+        let secondsLeft = POWERUP_SECONDS - Math.round((now - powerup.collectedAt) / 1000);
+        let flickerState = Math.sin(((now - powerup.collectedAt) / 250) * Math.PI) > 0;
         let x = uiCanvas.width - ((TILE_SIZE + 4) * (1 + idx));
 
-        if (powerupTimeRatio <= 0.8 || (powerupTimeRatio > 0.8 && Math.floor(powerupTimeRatio / 0.02) % 2 == 0)) {
+        if (secondsLeft > 5 || (secondsLeft > 0 && secondsLeft <= 5 && flickerState)) {
           drawSprite(uiContext, 'items', new Point(x, 0), powerup.icon);
         }
 
-        let powerupAngleRatio = Math.PI * powerupTimeRatio;
+        let powerupAngleRatio = Math.PI * (1 - (secondsLeft / POWERUP_SECONDS));
         uiContext.fillStyle = "rgba(0, 0, 127, 0.4)";
         uiContext.beginPath();
         uiContext.arc(x + (TILE_SIZE / 2), TILE_SIZE / 2, TILE_SIZE / 2, Math.PI / -2 + powerupAngleRatio, Math.PI / -2 - powerupAngleRatio);
@@ -1376,6 +1404,10 @@
 
     function drawLost() {
       drawCenterBanner("YOU LOST", "orange");
+    }
+
+    function drawTimeout() {
+      drawCenterBanner("TIME IS UP!", "orange");
     }
 
     function drawWillRestart() {
@@ -1481,16 +1513,15 @@
       let realX, realY;
       if (options.align && options.align.indexOf('vcenter') > -1) {
         realY = (uiCanvas.height / 2) - (LETTER_HEIGHT / 2) + y;
-      } else if (options.align && options.align.indexOf('vbottom')) {
+      } else if (options.align && options.align.indexOf('vbottom') > -1) {
         realY = uiCanvas.height - LETTER_HEIGHT + y;
       }
 
-      if (options.align && options.align.indexOf('hcenter')) {
+      if (options.align && options.align.indexOf('hcenter') > -1) {
         realX = (uiCanvas.width / 2) - (text.length * LETTER_WIDTH / 2) + x;
-      } else if (options.align && options.align.indexOf('hright')) {
+      } else if (options.align && options.align.indexOf('hright') > -1) {
         realX = uiCanvas.width - (text.length * LETTER_WIDTH) + x;
       }
-
 
       realX = realX || x;
       realY = realY || y;
