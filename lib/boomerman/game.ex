@@ -143,6 +143,7 @@ defmodule Boomerman.Game do
     GenServer.start_link(
       __MODULE__,
       %{
+        started_at: System.monotonic_time(),
         game_state: :active,
         map: @map,
         free_slots: @map.slots,
@@ -261,6 +262,7 @@ defmodule Boomerman.Game do
   end
 
   @native_second System.convert_time_unit(1, :second, :native)
+  @time_limit 120 * @native_second
 
   @impl true
   def handle_info(:game_loop, state) do
@@ -334,6 +336,15 @@ defmodule Boomerman.Game do
             state
         end
 
+      state =
+        if state.game_state == :active and now - state.started_at > @time_limit do
+          broadcast(:game_will_restart)
+          schedule_restart()
+          %{state | game_state: :inactive}
+        else
+          state
+        end
+
       {:noreply, state}
     else
       {:noreply, state}
@@ -366,7 +377,16 @@ defmodule Boomerman.Game do
     end)
 
     schedule_game_loop()
-    {:noreply, %{state | game_state: :active, map: @map, players: players, bombs: %{}}}
+
+    {:noreply,
+     %{
+       state
+       | started_at: System.monotonic_time(),
+         game_state: :active,
+         map: @map,
+         players: players,
+         bombs: %{}
+     }}
   end
 
   def handle_info(:slot_cleanup, state) do
