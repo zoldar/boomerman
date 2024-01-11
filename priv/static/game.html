@@ -799,21 +799,14 @@
         if (keys[e.key]) return;
 
         let key = keyHandlers.has(e.key) ? e.key : 'any';
-        let handler = keyHandlers.get(key)
-        keyUpEvent = handler && [key, handler];
+        keyUpEvent = keyHandlers.get(key)
 
         keys[e.key] = true;
       });
 
       window.addEventListener('keyup', e => {
         if (keyUpEvent) {
-          let [key, handler] = keyUpEvent;
-
-          handler.callback();
-          if (handler.oneShot) {
-            keyHandlers.delete(key);
-          }
-
+          keyUpEvent.callback();
           keyUpEvent = null;
         }
 
@@ -839,9 +832,22 @@
       });
 
       window.addEventListener("touchend", e => {
+        let [mouseX, mouseY] = translateToCanvasPosition(touchStartX, touchStartY);
+        let handlerHit = false;
+
+        clickHandlers.forEach(({ box, callback }, key) => {
+          if (mouseX >= box.position.x && mouseX < box.position.x + box.width &&
+            mouseY >= box.position.y && mouseY < box.position.y + box.height) {
+            handlerHit = true;
+            callback();
+          }
+        });
+
         touchStartX = -1;
         touchStartY = -1;
         setArrowKey(null);
+
+        if (handlerHit) return;
 
         if (performance.now() - touchStartTime < 200) {
           keys[' '] = true;
@@ -877,43 +883,49 @@
       });
 
       window.addEventListener("mousemove", e => {
-        var canvasRatio = gameCanvas.width / gameCanvas.height;
-        var fullWidth = gameCanvas.scrollWidth;
-        var realHeight = gameCanvas.scrollHeight;
-        var realWidth = realHeight * canvasRatio;
-        var xOffset = (fullWidth - realWidth) / 2;
+        let [cx, cy] = translateToCanvasPosition(e.clientX, e.clientY);
 
-        var relativeX = e.clientX - (gameCanvas.offsetLeft + xOffset);
-        if (relativeX <= 0) {
-          mouseX = 0;
-        } else if (relativeX > 0 && relativeX < realWidth) {
-          mouseX = Math.round((relativeX / realWidth) * gameCanvas.width);
-        } else {
-          mouseX = gameCanvas.width;
-        }
-
-        var relativeY = e.clientY - gameCanvas.offsetTop;
-        if (relativeY <= 0) {
-          mouseY = 0;
-        } if (relativeY > 0 && relativeY < realHeight) {
-          mouseY = Math.round((relativeY / realHeight) * gameCanvas.height);
-        } else {
-          mouseY = gameCanvas.height;
-        }
+        mouseX = cx;
+        mouseY = cy;
       });
 
       window.addEventListener('click', e => {
-        clickHandlers.forEach(({ box, callback, oneShot }, key) => {
+        clickHandlers.forEach(({ box, callback }, key) => {
           if (mouseX >= box.position.x && mouseX < box.position.x + box.width &&
             mouseY >= box.position.y && mouseY < box.position.y + box.height) {
             callback();
-
-            if (oneShot) {
-              clickHandlers.delete(key);
-            }
           }
         });
       });
+    }
+
+    function translateToCanvasPosition(x, y) {
+      let cx, cy;
+      let canvasRatio = gameCanvas.width / gameCanvas.height;
+      let fullWidth = gameCanvas.scrollWidth;
+      let realHeight = gameCanvas.scrollHeight;
+      let realWidth = realHeight * canvasRatio;
+      let xOffset = (fullWidth - realWidth) / 2;
+
+      let relativeX = x - (gameCanvas.offsetLeft + xOffset);
+      if (relativeX <= 0) {
+        cx = 0;
+      } else if (relativeX > 0 && relativeX < realWidth) {
+        cx = Math.round((relativeX / realWidth) * gameCanvas.width);
+      } else {
+        cx = gameCanvas.width;
+      }
+
+      let relativeY = y - gameCanvas.offsetTop;
+      if (relativeY <= 0) {
+        cy = 0;
+      } if (relativeY > 0 && relativeY < realHeight) {
+        cy = Math.round((relativeY / realHeight) * gameCanvas.height);
+      } else {
+        cy = gameCanvas.height;
+      }
+
+      return [cx, cy];
     }
 
     function setArrowKey(pressedKey) {
@@ -1518,14 +1530,12 @@
     }
 
     function drawRestartButton(game) {
-      keyHandlers.set('any', { callback: () => restartGame(game), oneShot: true });
-
       drawButton(
         0,
         LETTER_HEIGHT * 2,
         'TRY AGAIN',
-        () => restartGame(game),
-        { align: 'hcenter vcenter', oneShot: true }
+        () => { restartGame(game) },
+        { align: 'hcenter vcenter', key: 'any', oneShot: true }
       )
     }
 
@@ -1538,10 +1548,27 @@
         { align: opts.align, border: border, hPadding: 6, vPadding: 3 }
       );
 
+      if (opts.key) {
+        keyHandlers.set(opts.key, {
+          callback: () => {
+            if (opts.oneShot) {
+              keyHandlers.delete(opts.key);
+              clickHandlers.delete(box.hash());
+            }
+            callback();
+          }
+        });
+      }
+
       clickHandlers.set(box.hash(), {
         box: box,
-        callback: callback,
-        oneShot: opts.oneShot
+        callback: () => {
+          if (opts.oneShot) {
+              if (opts.key) keyHandlers.delete(opts.key);
+              clickHandlers.delete(box.hash());
+          }
+          callback();
+        }
       });
     }
 
