@@ -267,6 +267,8 @@
     let mouseX = 0;
     let mouseY = 0;
     let clickHandlers = new Map();
+    let keyHandlers = new Map();
+    let keyUpEvent;
 
     const letterSheet = document.getElementById('letter-sheet');
 
@@ -793,10 +795,28 @@
       let touchStartTime = -1;
 
       window.addEventListener('keydown', e => {
+        // disable key repeating
+        if (keys[e.key]) return;
+
+        let key = keyHandlers.has(e.key) ? e.key : 'any';
+        let handler = keyHandlers.get(key)
+        keyUpEvent = handler && [key, handler];
+
         keys[e.key] = true;
       });
 
       window.addEventListener('keyup', e => {
+        if (keyUpEvent) {
+          let [key, handler] = keyUpEvent;
+
+          handler.callback();
+          if (handler.oneShot) {
+            keyHandlers.delete(key);
+          }
+
+          keyUpEvent = null;
+        }
+
         keys[e.key] = false;
       });
 
@@ -1498,6 +1518,8 @@
     }
 
     function drawRestartButton(game) {
+      keyHandlers.set('any', { callback: () => restartGame(game), oneShot: true });
+
       drawButton(
         0,
         LETTER_HEIGHT * 2,
