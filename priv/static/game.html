@@ -144,6 +144,22 @@
       }
     }
 
+    class BoundingBox {
+      position;
+      width;
+      height;
+
+      constructor(position, width, height) {
+        this.position = position;
+        this.width = width;
+        this.height = height;
+      }
+
+      hash() {
+        return `${this.position.x}#${this.position.y}#${this.width}#${this.height}`;
+      }
+    }
+
     class HashSet {
       hashMap = new Map();
 
@@ -247,7 +263,10 @@
     let gameCanvas;
     let gameContext;
     let oldTimeStamp = 0;
-    let keys = {}
+    let keys = {};
+    let mouseX = 0;
+    let mouseY = 0;
+    let clickHandlers = new Map();
 
     const letterSheet = document.getElementById('letter-sheet');
 
@@ -524,7 +543,7 @@
 
       setupControls();
 
-      let game = { loading: true };
+      var game = { loading: true };
 
       if (window.location.search == '?multi') {
         const protocol = window.location.protocol == 'http:' ? 'ws:' : 'wss:';
@@ -562,12 +581,12 @@
               game.enemies.delete(new Enemy(new Point(message.x, message.y).multiply(TILE_SIZE)));
             } else if (!game.loading && message.action == 'game_lost') {
               game.state = 'lost';
-              drawLost();
+              drawLost(game);
             } else if (!game.loading && message.action == 'game_won') {
               game.loading = true;
               game.state = 'won';
               stopGame(game);
-              drawWon();
+              drawWon(game);
             } else if (!game.loading && message.action == 'game_will_restart') {
               game.loading = true;
               game.state = 'will_restart';
@@ -650,7 +669,7 @@
       }
     }
 
-    function startGame(game) {
+    function startGame(game, skipRequestAnimation) {
       game.playerAnimator = animatePlayer(game);
       game.enemyAnimator = animateEnemies(game);
       game.bombAnimator = animateBombs(game);
@@ -661,7 +680,9 @@
       game.startedAt = performance.now();
 
       // Start the first frame request
-      window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+      if (!skipRequestAnimation) {
+        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+      }
     }
 
     function stopGame(game) {
@@ -707,6 +728,14 @@
         powerups: new HashSet(),
         startedAt: null,
         timeLimitSeconds: 120
+      }
+    }
+
+    function resetGame(game, map) {
+      let newGame = loadGame(map);
+
+      for (const [key, value] of Object.entries(newGame)) {
+        game[key] = value;
       }
     }
 
@@ -826,6 +855,45 @@
           e.preventDefault();
         }
       });
+
+      window.addEventListener("mousemove", e => {
+        var canvasRatio = gameCanvas.width / gameCanvas.height;
+        var fullWidth = gameCanvas.scrollWidth;
+        var realHeight = gameCanvas.scrollHeight;
+        var realWidth = realHeight * canvasRatio;
+        var xOffset = (fullWidth - realWidth) / 2;
+
+        var relativeX = e.clientX - (gameCanvas.offsetLeft + xOffset);
+        if (relativeX <= 0) {
+          mouseX = 0;
+        } else if (relativeX > 0 && relativeX < realWidth) {
+          mouseX = Math.round((relativeX / realWidth) * gameCanvas.width);
+        } else {
+          mouseX = gameCanvas.width;
+        }
+
+        var relativeY = e.clientY - gameCanvas.offsetTop;
+        if (relativeY <= 0) {
+          mouseY = 0;
+        } if (relativeY > 0 && relativeY < realHeight) {
+          mouseY = Math.round((relativeY / realHeight) * gameCanvas.height);
+        } else {
+          mouseY = gameCanvas.height;
+        }
+      });
+
+      window.addEventListener('click', e => {
+        clickHandlers.forEach(({ box, callback, oneShot }, key) => {
+          if (mouseX >= box.position.x && mouseX < box.position.x + box.width &&
+            mouseY >= box.position.y && mouseY < box.position.y + box.height) {
+            callback();
+
+            if (oneShot) {
+              clickHandlers.delete(key);
+            }
+          }
+        });
+      });
     }
 
     function setArrowKey(pressedKey) {
@@ -905,11 +973,11 @@
         drawGame(game, secondsPassed);
 
         if (game.state == 'lost') {
-          drawLost();
+          drawLost(game);
         } else if (game.state == 'won') {
-          drawWon();
+          drawWon(game);
         } else if (game.state == 'timeout') {
-          drawTimeout();
+          drawTimeout(game);
         } else {
           drawUI(game, secondsPassed);
         }
@@ -1398,19 +1466,22 @@
       uiContext.clearRect(0, 24, uiCanvas.width, uiCanvas.height - 48);
     }
 
-    function drawWon() {
-      drawCenterBanner("YOU WON!", "green");
+    function drawWon(game) {
+      drawCenterBanner('YOU WON!', 'green');
+      drawRestartButton(game);
     }
 
-    function drawLost() {
-      drawCenterBanner("YOU LOST", "orange");
+    function drawLost(game) {
+      drawCenterBanner('YOU LOST', 'orange');
+      drawRestartButton(game);
     }
 
-    function drawTimeout() {
-      drawCenterBanner("TIME IS UP!", "orange");
+    function drawTimeout(game) {
+      drawCenterBanner('TIME IS UP!', 'orange');
+      drawRestartButton(game);
     }
 
-    function drawWillRestart() {
+    function drawWillRestart(game) {
       drawCenterBanner("GAME WILL RESTART", "orange");
     }
 
@@ -1424,6 +1495,38 @@
           border: { color: 'white', background: 'green' }
         }
       );
+    }
+
+    function drawRestartButton(game) {
+      drawButton(
+        0,
+        LETTER_HEIGHT * 2,
+        'TRY AGAIN',
+        () => restartGame(game),
+        { align: 'hcenter vcenter', oneShot: true }
+      )
+    }
+
+    function drawButton(x, y, text, callback, opts) {
+      let border = { color: 'white', background: opts.background || 'black' };
+      let box = drawText(
+        x,
+        y,
+        text,
+        { align: opts.align, border: border, hPadding: 6, vPadding: 3 }
+      );
+
+      clickHandlers.set(box.hash(), {
+        box: box,
+        callback: callback,
+        oneShot: opts.oneShot
+      });
+    }
+
+    function restartGame(game) {
+      stopGame(game);
+      resetGame(game, map0);
+      startGame(game, true);
     }
 
     function drawGame(game) {
@@ -1509,6 +1612,8 @@
 
     function drawText(x, y, inText, options) {
       options = options || {};
+      let hPadding = options.hPadding || 10;
+      let vPadding = options.vPadding || 5;
       let text = inText.toLowerCase();
       let realX, realY;
       if (options.align && options.align.indexOf('vcenter') > -1) {
@@ -1526,16 +1631,25 @@
       realX = realX || x;
       realY = realY || y;
 
+      let finalX = realX;
+      let finalY = realY;
+      let width = text.length * LETTER_WIDTH;
+      let height = LETTER_HEIGHT;
+
       if (options.border) {
         let borderRadius = options.border.radius || 5;
+        finalX = finalX - hPadding;
+        finalY = finalY - hPadding;
+        width = width + 2 * hPadding;
+        height = height + 2 * vPadding;
 
         uiContext.fillStyle = options.border.background || 'black';
         uiContext.beginPath();
         uiContext.roundRect(
-          realX - 10,
-          realY - 5,
-          text.length * LETTER_WIDTH + 20,
-          LETTER_HEIGHT + 10,
+          realX - hPadding,
+          realY - vPadding,
+          width,
+          height,
           borderRadius
         );
         uiContext.fill();
@@ -1545,10 +1659,10 @@
           uiContext.lineWidth = options.border.size || 2;
           uiContext.beginPath();
           uiContext.roundRect(
-            realX - 10,
-            realY - 5,
-            text.length * LETTER_WIDTH + 20,
-            LETTER_HEIGHT + 10,
+            realX - hPadding,
+            realY - vPadding,
+            width,
+            height,
             borderRadius
           );
           uiContext.stroke();
@@ -1570,6 +1684,8 @@
           LETTER_HEIGHT
         );
       });
+
+      return new BoundingBox(new Point(finalX, finalY), width, height);
     }
   </script>
 </body>
