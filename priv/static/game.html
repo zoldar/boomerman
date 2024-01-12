@@ -1535,7 +1535,7 @@
         LETTER_HEIGHT * 2,
         'TRY AGAIN',
         () => { restartGame(game) },
-        { align: 'hcenter vcenter', key: 'any', oneShot: true }
+        { align: 'hcenter vcenter', key: 'r', oneShot: true }
       )
     }
 
@@ -1564,8 +1564,8 @@
         box: box,
         callback: () => {
           if (opts.oneShot) {
-              if (opts.key) keyHandlers.delete(opts.key);
-              clickHandlers.delete(box.hash());
+            if (opts.key) keyHandlers.delete(opts.key);
+            clickHandlers.delete(box.hash());
           }
           callback();
         }
