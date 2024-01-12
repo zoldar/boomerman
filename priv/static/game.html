@@ -1132,7 +1132,7 @@
           if (Math.abs(newY - position.y) < TILE_SIZE && detectCollisions(player.atPosition(new Point(position.x, newY)), obstacles).length == 0) {
             player.setPosition(new Point(position.x, newY));
 
-            if (hits.length == 1) {
+            if (hits.length == 1 && hit.boundingBox.width == TILE_SIZE) {
               // sliding to the side
               if (player.position.x - hit.position.x > 0) {
                 let delta = hit.position.x + hit.boundingBox.width - player.position.x;
@@ -1161,7 +1161,7 @@
           if (Math.abs(newX - position.x) < TILE_SIZE && detectCollisions(player.atPosition(new Point(newX, position.y)), obstacles).length == 0) {
             player.setPosition(new Point(newX, position.y));
 
-            if (hits.length == 1) {
+            if (hits.length == 1 && hit.boundingBox.height == TILE_SIZE) {
               // sliding to the side
               if (player.position.y - hit.position.y > 0) {
                 let delta = hit.position.y + hit.boundingBox.height - player.position.y;
