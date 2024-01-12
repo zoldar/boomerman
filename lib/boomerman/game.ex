@@ -421,7 +421,8 @@ defmodule Boomerman.Game do
          game_state: :active,
          map: @map,
          players: players,
-         bombs: %{}
+         bombs: %{},
+         powerups: %{}
      }}
   end
 
