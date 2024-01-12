@@ -579,9 +579,15 @@
               let powerups = message.powerups.map(p => {
                 return new Powerup(p.powerup, new Point(p.x, p.y).multiply(TILE_SIZE))
               });
+              let bombs = message.bombs.map(bomb => {
+                let { position, blast_radius, owner, planted_ago_ms } = bomb;
+                owner = new Point(owner.x, owner.y).multiply(TILE_SIZE);
+                return new Bomb(new Point(position.x, position.y).multiply(TILE_SIZE), blast_radius, owner, -1 * planted_ago_ms);
+              });
+
               let gameTimeMs = message.game_time_ms;
 
-              game = loadGame(message.map, playerPostion, otherPlayers, socket, gameTimeMs, powerups);
+              game = loadGame(message.map, playerPostion, otherPlayers, socket, gameTimeMs, powerups, bombs);
 
               startGame(game);
             } else if (!game.loading && message.action == 'player_joined') {
@@ -703,11 +709,12 @@
       }
     }
 
-    function loadGame(map, playerPosition, otherPlayers, socket, gameTimeMs, existingPowerups) {
+    function loadGame(map, playerPosition, otherPlayers, socket, gameTimeMs, existingPowerups, existingBombs) {
       let walls = new HashSet();
       let crates = new HashSet();
       let enemies = new HashSet();
       let powerups = new HashSet(existingPowerups || []);
+      let bombs = new HashSet(existingBombs || []);
       gameTimeMs = gameTimeMs || 0;
 
       if (otherPlayers) {
@@ -737,7 +744,7 @@
         walls: walls,
         crates: crates,
         enemies: enemies,
-        bombs: new HashSet(),
+        bombs: bombs,
         blasts: new HashSet(),
         powerups: powerups,
         startedAt: null,
@@ -1271,12 +1278,12 @@
       hitBox;
       owner;
 
-      constructor(position, blastRadius, owner) {
+      constructor(position, blastRadius, owner, timeDelta) {
         this.position = position;
         this.blastRadius = blastRadius;
         this.boundingBox = smallBoundingBox(position);
         this.hitBox = fullBoundingBox(position);
-        this.droppedAt = performance.now();
+        this.droppedAt = performance.now() + (timeDelta || 0);
         this.owner = owner;
       }
 

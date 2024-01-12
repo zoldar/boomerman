@@ -162,9 +162,10 @@ defmodule Boomerman.Game do
   @spec register() :: {:ok, {map(), slot(), map()}} | {:error, :no_slots}
   def register do
     case GenServer.call(__MODULE__, :register) do
-      {:ok, {map, game_time_ms, slot, players, powerups}} ->
+      {:ok, {map, game_time_ms, slot, players, powerups, bombs}} ->
         {:ok, _} = Registry.register(Boomerman.PlayerRegistry, "game", slot)
-        {:ok, {map, game_time_ms, slot, players, powerups}}
+
+        {:ok, {map, game_time_ms, slot, players, powerups, bombs}}
 
       {:error, error} ->
         {:error, error}
@@ -209,9 +210,29 @@ defmodule Boomerman.Game do
 
         game_time_ms = (System.monotonic_time() - state.started_at) / @native_ms
 
+        now = System.monotonic_time()
+
+        bombs =
+          Enum.map(
+            state.bombs,
+            fn {{bx, by},
+                %{owner: player_pid, planted_at: planted_at, blast_radius: blast_radius}} ->
+              planted_ago_ms = Float.round((now - planted_at) / @native_ms)
+              %{slot: {owner_x, owner_y}} = state.players[player_pid]
+
+              %{
+                position: %{x: bx, y: by},
+                owner: %{x: owner_x, y: owner_y},
+                planted_ago_ms: planted_ago_ms,
+                blast_radius: blast_radius
+              }
+            end
+          )
+
         {:reply,
          {:ok,
-          {state.map.definition, game_time_ms, slot, Map.values(state.players), state.powerups}},
+          {state.map.definition, game_time_ms, slot, Map.values(state.players), state.powerups,
+           bombs}},
          %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(pid, slot))}}
 
       [] ->
