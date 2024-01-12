@@ -1031,7 +1031,8 @@
       }
 
       if (game.state == 'active') {
-        updatePlayer(game, secondsPassed, directionOverride, deltaOverride);
+        updatePlayerMovement(game, secondsPassed, directionOverride, deltaOverride);
+        updatePlayerInteractions(game);
         updatePlayerPowerups(game);
       }
 
@@ -1040,7 +1041,39 @@
       updateBlasts(game);
     }
 
-    function updatePlayer(game, secondsPassed, directionOverride, deltaOverride) {
+    function updatePlayerInteractions(game) {
+      let { player, enemies, powerups} = game;
+
+      if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
+        game.state = 'lost';
+        return;
+      }
+
+      let powerupHits = detectCollisions(player, [powerups]);
+
+      if (powerupHits.length > 0) {
+        let hit = powerupHits[0];
+
+        if (game.socket) {
+          let tilePosition = hit.position.divide(TILE_SIZE);
+          game.socket.send(JSON.stringify(['cp', tilePosition.x, tilePosition.y]));
+        } else {
+          if (hit.type == 'surprise') {
+            let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
+            if (type == 'clear') {
+              player.powerups.clear();
+            } else {
+              player.powerups.add(new PowerupIcon(type));
+            }
+          } else {
+            player.powerups.add(hit.icon());
+          }
+          powerups.delete(hit);
+        }
+      }
+    }
+
+    function updatePlayerMovement(game, secondsPassed, directionOverride, deltaOverride) {
       let { player, walls, crates, bombs, enemies } = game;
 
       let oldDirection = player.direction;
@@ -1082,34 +1115,6 @@
         obstacles = [walls, crates, nonTransparentBombs];
       }
 
-      if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
-        game.state = 'lost';
-        return;
-      }
-
-      let powerupHits = detectCollisions(player, [game.powerups]);
-
-      if (powerupHits.length > 0) {
-        let hit = powerupHits[0];
-
-        if (game.socket) {
-          let tilePosition = hit.position.divide(TILE_SIZE);
-          game.socket.send(JSON.stringify(['cp', tilePosition.x, tilePosition.y]));
-        } else {
-          if (hit.type == 'surprise') {
-            let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
-            if (type == 'clear') {
-              player.powerups.clear();
-            } else {
-              player.powerups.add(new PowerupIcon(type));
-            }
-          } else {
-            player.powerups.add(hit.icon());
-          }
-          game.powerups.delete(hit);
-        }
-      }
-
       let hits = detectCollisions(player, obstacles);
 
       if (hits.length > 0) {
@@ -1133,13 +1138,13 @@
                 let delta = hit.position.x + hit.boundingBox.width - player.position.x;
 
                 if (delta < hit.boundingBox.width * 0.75) {
-                  update(game, secondsPassed, RIGHT, delta);
+                  updatePlayerMovement(game, secondsPassed, RIGHT, delta);
                 }
               } else {
                 let delta = player.position.x + player.boundingBox.width - hit.position.x;
 
                 if (delta < hit.boundingBox.width * 0.75) {
-                  update(game, secondsPassed, LEFT, delta);
+                  updatePlayerMovement(game, secondsPassed, LEFT, delta);
                 }
               }
             }
@@ -1162,13 +1167,13 @@
                 let delta = hit.position.y + hit.boundingBox.height - player.position.y;
 
                 if (delta < hit.boundingBox.height * 0.75) {
-                  update(game, secondsPassed, DOWN, delta);
+                  updatePlayerMovement(game, secondsPassed, DOWN, delta);
                 }
               } else {
                 let delta = player.position.y + player.boundingBox.height - hit.position.y;
 
                 if (delta < hit.boundingBox.height * 0.75) {
-                  update(game, secondsPassed, UP, delta);
+                  updatePlayerMovement(game, secondsPassed, UP, delta);
                 }
               }
             }
