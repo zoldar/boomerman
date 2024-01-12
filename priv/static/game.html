@@ -334,7 +334,8 @@
       'bomb_powerup': [0, 0],
       'bomb_powerup2': [1, 0],
       'confused_powerup': [0, 5],
-      'confused_powerup2': [1, 5]
+      'confused_powerup2': [1, 5],
+      'rampage_powerup': [2, 4]
     };
 
     const enemySheet = {
@@ -760,8 +761,8 @@
       }
     }
 
-    const surprisePowerUps = ['bomb', 'blast', 'speed', 'clear'];
-    const powerupTypes = ['bomb', 'blast', 'speed', 'surprise'];
+    const surprisePowerups = ['bomb', 'blast', 'speed', 'clear'];
+    const powerupTypes = ['bomb', 'blast', 'speed', 'surprise', 'rampage'];
 
     class Powerup {
       type;
@@ -805,6 +806,7 @@
     const BLAST_POWERUP = new PowerupIcon('blast');
     const SPEED_POWERUP = new PowerupIcon('speed');
     const SURPRISE_POWERUP = new PowerupIcon('surprise');
+    const RAMPAGE_POWERUP = new PowerupIcon('rampage');
 
     function setupControls() {
       let linkClicked = false;
@@ -1057,9 +1059,22 @@
     function updatePlayerInteractions(game) {
       let { player, enemies, powerups } = game;
 
-      if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
-        game.state = 'lost';
-        return;
+      if (!game.socket) {
+        let hitEnemies = detectCollisions(player, [enemies], 'hitBox');
+
+        if (hitEnemies.length > 0) {
+          if (player.powerups.has(RAMPAGE_POWERUP)) {
+            hitEnemies.forEach(e => enemies.delete(e));
+
+            player.powerups.delete(RAMPAGE_POWERUP);
+
+            if (enemies.size == 0) {
+              game.state = 'won';
+            }
+          } else {
+            game.state = 'lost';
+          }
+        }
       }
 
       let powerupHits = detectCollisions(player, [powerups]);
@@ -1071,17 +1086,22 @@
           let tilePosition = hit.position.divide(TILE_SIZE);
           game.socket.send(JSON.stringify(['cp', tilePosition.x, tilePosition.y]));
         } else {
-          if (hit.type == 'surprise') {
-            let type = surprisePowerUps[(Math.floor(Math.random() * surprisePowerUps.length))];
-            if (type == 'clear') {
+          if (!player.powerups.has(RAMPAGE_POWERUP)) {
+            if (hit.type == 'surprise') {
+              let type = surprisePowerups[(Math.floor(Math.random() * surprisePowerups.length))];
+              if (type == 'clear') {
+                player.powerups.clear();
+              } else {
+                player.powerups.add(new PowerupIcon(type));
+              }
+            } else if (hit.type == 'rampage') {
               player.powerups.clear();
+              player.powerups.add(new PowerupIcon('rampage'));
             } else {
-              player.powerups.add(new PowerupIcon(type));
+              player.powerups.add(hit.icon());
             }
-          } else {
-            player.powerups.add(hit.icon());
+            powerups.delete(hit);
           }
-          powerups.delete(hit);
         }
       }
     }
