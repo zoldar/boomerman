@@ -7,6 +7,8 @@
 * [x] ability to restart single player game with a button
 * [x] fix bomb collision handling in multiplayer
 * [x] sync bomb state on join in multiplayer
+* [ ] assure that only active players are taken into account in collision detection, blasting etc. and they are not updated and can't drop bombs
+* [ ] fix serverside collision detection so that player can't cheat by "walking into" a bomb
 * [ ] respawns + frag count
 * [ ] respawning crates
 * [ ] leaderboard
