@@ -207,6 +207,7 @@
       }
     }
 
+    const MAX_FPS = 60;
     const TILE_SIZE = 16;
     const PLAYER_VELOCITY = 48;
     const POWERUP_VELOCITY = 72;
@@ -262,13 +263,15 @@
     let uiContext;
     let gameCanvas;
     let gameContext;
-    let oldTimeStamp = 0;
+    let requestAnimationFrameId;
+    let oldTimeStamp = performance.now();
     let keys = {};
     let mouseX = 0;
     let mouseY = 0;
     let clickHandlers = new Map();
     let keyHandlers = new Map();
     let keyUpEvent;
+    let currentFPS = 1;
 
     const letterSheet = document.getElementById('letter-sheet');
 
@@ -682,15 +685,17 @@
       game.startedAt = performance.now();
 
       // Start the first frame request
-      if (!skipRequestAnimation) {
-        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
-      }
+      requestAnimationFrameId = window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
     }
 
     function stopGame(game) {
       clearInterval(game.playerAnimator);
       clearInterval(game.enemyAnimator);
       clearInterval(game.bombAnimator);
+
+      if (requestAnimationFrameId) {
+        cancelAnimationFrame(requestAnimationFrameId);
+      }
     }
 
     function loadGame(map, playerPosition, otherPlayers, socket) {
@@ -993,13 +998,16 @@
 
     function gameLoop(timeStamp, game) {
       if (!game.loading) {
+        // Keep requesting new frames
+        requestAnimationFrameId = requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
+
+        // Skip frame drawing if not enough time has passed
+        if (timeStamp < oldTimeStamp + (1000 / MAX_FPS)) return;
+
         // Calculate the number of seconds passed since the last frame
         // with a maximum of 0.1 second.
         let secondsPassed = Math.min(0.1, (timeStamp - oldTimeStamp) / 1000);
         oldTimeStamp = timeStamp;
-
-        // Keep requesting new frames
-        window.requestAnimationFrame((timeStamp) => gameLoop(timeStamp, game));
 
         update(game, secondsPassed);
         drawGame(game, secondsPassed);
@@ -1450,13 +1458,14 @@
 
     function drawUI(game, secondsPassed) {
       // Calculate fps
-      let fps = Math.round(1 / secondsPassed);
+      // Formula taken from https://blog.jakuba.net/2018-01-28-lets-write-a-2d-platformer-from-scratch-part-1/
+      currentFPS = currentFPS + (1 - 0.1) * ((1 / secondsPassed) - currentFPS);
 
       // Clear the top part of canvas
       uiContext.clearRect(0, 0, uiCanvas.width, 24);
 
       // Draw number to the screen
-      drawText(4, 0, 'FPS: ' + fps);
+      drawText(4, 0, 'FPS: ' + Math.round(currentFPS));
 
       let now = performance.now();
 
