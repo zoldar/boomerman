@@ -492,8 +492,8 @@
         this.direction = direction;
       }
 
-      equals(e) {
-        return e.hash() == this.hash();
+      equals(o) {
+        return this.hash() === o.hash();
       }
 
       hash() {
@@ -1209,7 +1209,8 @@
         enemy.setPosition(enemy.position.add(enemy.direction.multiply(enemy.velocity * secondsPassed)));
 
         let otherEnemies = game.socket ? enemies.toArray().filter(e => !e.equals(enemy)) : [];
-        let hits = detectCollisions(enemy, obstacles.concat([otherEnemies]));
+        let nonTransparentBombs = game.socket ? bombs.toArray().filter(b => !b.owner || !enemy.equals(b.owner) || (enemy.equals(b.owner) && !b.transparent)) : [];
+        let hits = detectCollisions(enemy, obstacles.concat([otherEnemies, nonTransparentBombs]));
 
         if (hits.length > 0) {
           let hit = hits[0];
@@ -1222,7 +1223,9 @@
               newY = hit.boundingBox.position.y + hit.boundingBox.height;
             }
 
-            enemy.setPosition(new Point(enemy.position.x, newY));
+            if (Math.abs(newY - enemy.position.y) < TILE_SIZE && detectCollisions(enemy.atPosition(new Point(enemy.position.x, newY)), obstacles).length == 0) {
+              enemy.setPosition(new Point(enemy.position.x, newY));
+            }
           } else if (enemy.direction.horizontal()) {
             let newX;
             if (enemy.direction.x > 0) {
@@ -1231,7 +1234,9 @@
               newX = hit.boundingBox.position.x + hit.boundingBox.width;
             }
 
-            enemy.setPosition(new Point(newX, enemy.position.y));
+            if (Math.abs(newX - enemy.position.x) < TILE_SIZE && detectCollisions(enemy.atPosition(new Point(newX, enemy.position.y)), obstacles).length == 0) {
+              enemy.setPosition(new Point(newX, enemy.position.y));
+            }
           }
 
           if (!game.socket) {
@@ -1264,6 +1269,10 @@
         this.owner = owner;
       }
 
+      equals(o) {
+        return this.hash() === o.hash();
+      }
+
       hash() {
         return this.position.x + "#" + this.position.y;
       }
@@ -1284,14 +1293,16 @@
     }
 
     function updateBombs(game) {
-      let { player, bombs } = game;
+      let { player, bombs, enemies } = game;
       let now = performance.now();
 
       bombs.forEach(bomb => {
         let timePassed = (now - bomb.droppedAt) / 1000;
 
         if (bomb.transparent) {
-          if (detectCollisions(player, [new HashSet([bomb])], true).length == 0) {
+          if (!bomb.owner && detectCollisions(player, [new HashSet([bomb])]).length == 0) {
+            bomb.transparent = false;
+          } else if (bomb.owner && detectCollisions(enemies.get(bomb.owner), [new HashSet([bomb])]).length == 0) {
             bomb.transparent = false;
           }
         }
