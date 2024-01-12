@@ -14,4 +14,3 @@
 * [ ] implement dying animation for player and player enemies
 * [ ] better touch controls
 * [ ] lag compensation
-* [ ] more even delta/FPS adjustment, ideally with FPS cap at either 60 or 30
