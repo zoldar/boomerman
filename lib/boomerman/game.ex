@@ -183,8 +183,6 @@ defmodule Boomerman.Game do
 
   def drop_bomb({x, y}, blast_radius) do
     :ok = GenServer.call(__MODULE__, {:drop_bomb, {x, y}, blast_radius})
-
-    broadcast({:bomb_dropped, {x, y}, blast_radius}, self())
   end
 
   def collect_powerup({x, y}) do
@@ -229,11 +227,23 @@ defmodule Boomerman.Game do
     end
   end
 
-  def handle_call({:drop_bomb, position, blast_radius}, {pid, _}, state) do
-    if state.players[pid] do
-      bomb = %Bomb{owner: pid, planted_at: System.monotonic_time(), blast_radius: blast_radius}
+  def handle_call({:drop_bomb, {x, y}, blast_radius}, {pid, _}, state) do
+    if player = state.players[pid] do
+      state =
+        if not Map.has_key?(state.bombs, {x, y}) do
+          bomb = %Bomb{
+            owner: pid,
+            planted_at: System.monotonic_time(),
+            blast_radius: blast_radius
+          }
 
-      {:reply, :ok, %{state | bombs: Map.put(state.bombs, position, bomb)}}
+          broadcast({:bomb_dropped, {x, y}, blast_radius, player.slot}, pid)
+          %{state | bombs: Map.put(state.bombs, {x, y}, bomb)}
+        else
+          state
+        end
+
+      {:reply, :ok, state}
     else
       {:reply, {:error, :no_player}, state}
     end

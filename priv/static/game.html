@@ -620,8 +620,9 @@
               enemy.turn(direction);
               enemy.velocity = velocity;
             } else if (!game.loading && message[0] == 'b') {
-              let [_, bombX, bombY, blastRadius] = message;
-              game.bombs.add(new Bomb(new Point(bombX, bombY).multiply(TILE_SIZE), blastRadius, false));
+              let [_, bombX, bombY, blastRadius, slotX, slotY] = message;
+              let owner = new Point(slotX, slotY).multiply(TILE_SIZE);
+              game.bombs.add(new Bomb(new Point(bombX, bombY).multiply(TILE_SIZE), blastRadius, owner));
             } else if (!game.loading && message[0] == 'bi') {
               let [_, bombX, bombY] = message;
               let bomb = game.bombs.get(new Point(bombX, bombY).multiply(TILE_SIZE));
@@ -1073,7 +1074,7 @@
       delta = deltaOverride && deltaOverride < delta ? deltaOverride : delta;
       player.setPosition(position.add(direction.multiply(delta)));
 
-      var nonTransparentBombs = new HashSet(bombs.toArray().filter(b => !b.transparent));
+      var nonTransparentBombs = new HashSet(bombs.toArray().filter(b => b.owner || !b.transparent));
       var obstacles;
       if (game.socket) {
         obstacles = [walls, crates, nonTransparentBombs, enemies];
@@ -1252,15 +1253,15 @@
       explodedAt;
       boundingBox;
       hitBox;
-      ownedByPlayer;
+      owner;
 
-      constructor(position, blastRadius, ownedByPlayer) {
+      constructor(position, blastRadius, owner) {
         this.position = position;
         this.blastRadius = blastRadius;
         this.boundingBox = smallBoundingBox(position);
         this.hitBox = fullBoundingBox(position);
         this.droppedAt = performance.now();
-        this.ownedByPlayer = ownedByPlayer;
+        this.owner = owner;
       }
 
       hash() {
@@ -1270,10 +1271,10 @@
 
     function dropBomb(game) {
       let maxBombs = game.player.powerups.has(BOMB_POWERUP) ? 4 : 2;
-      if (game.bombs.toArray().filter(b => b.ownedByPlayer).length < maxBombs) {
+      if (game.bombs.toArray().filter(b => !b.owner).length < maxBombs) {
         let tilePosition = game.player.position.divide(TILE_SIZE).round();
         let blastRadius = game.player.powerups.has(BLAST_POWERUP) ? 4 : 2;
-        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE), blastRadius, true);
+        let bomb = new Bomb(tilePosition.multiply(TILE_SIZE), blastRadius);
 
         if (!game.bombs.has(bomb) && detectCollisions(bomb, [game.enemies]).length == 0) {
           if (game.socket) game.socket.send(JSON.stringify(["b", tilePosition.x, tilePosition.y, blastRadius]));
