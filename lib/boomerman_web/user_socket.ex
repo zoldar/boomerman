@@ -23,7 +23,7 @@ defmodule BoomermanWeb.UserSocket do
 
   def handle_in({"register", _opts}, state) do
     case Game.register() do
-      {:ok, {map, {x, y}, players}} ->
+      {:ok, {map, game_time_ms, {x, y}, players, powerups}} ->
         players =
           Enum.map(
             players,
@@ -32,9 +32,19 @@ defmodule BoomermanWeb.UserSocket do
             end
           )
 
+        powerups = Enum.map(powerups, fn {{x, y}, powerup} -> %{x: x, y: y, powerup: powerup} end)
+
         {:reply, :ok,
-         {:text, Jason.encode!(%{action: :registered, x: x, y: y, map: map, players: players})},
-         state}
+         {:text,
+          Jason.encode!(%{
+            action: :registered,
+            x: x,
+            y: y,
+            game_time_ms: game_time_ms,
+            map: map,
+            players: players,
+            powerups: powerups
+          })}, state}
 
       {:error, reason} ->
         {:reply, :error, {:text, Jason.encode!(%{error: true, reason: reason})}, state}

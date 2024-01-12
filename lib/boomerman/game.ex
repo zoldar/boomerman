@@ -1,6 +1,10 @@
 defmodule Boomerman.Game do
   use GenServer
 
+  @native_second System.convert_time_unit(1, :second, :native)
+  @native_ms System.convert_time_unit(1, :millisecond, :native)
+  @time_limit 120 * @native_second
+
   defmodule GameMap do
     defstruct [
       :width,
@@ -158,9 +162,9 @@ defmodule Boomerman.Game do
   @spec register() :: {:ok, {map(), slot(), map()}} | {:error, :no_slots}
   def register do
     case GenServer.call(__MODULE__, :register) do
-      {:ok, {map, slot, players}} ->
+      {:ok, {map, game_time_ms, slot, players, powerups}} ->
         {:ok, _} = Registry.register(Boomerman.PlayerRegistry, "game", slot)
-        {:ok, {map, slot, players}}
+        {:ok, {map, game_time_ms, slot, players, powerups}}
 
       {:error, error} ->
         {:error, error}
@@ -203,7 +207,11 @@ defmodule Boomerman.Game do
       [slot | slots] ->
         broadcast({:player_joined, slot}, pid)
 
-        {:reply, {:ok, {state.map.definition, slot, Map.values(state.players)}},
+        game_time_ms = (System.monotonic_time() - state.started_at) / @native_ms
+
+        {:reply,
+         {:ok,
+          {state.map.definition, game_time_ms, slot, Map.values(state.players), state.powerups}},
          %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(pid, slot))}}
 
       [] ->
@@ -270,9 +278,6 @@ defmodule Boomerman.Game do
       {:reply, {:error, :no_player}, state}
     end
   end
-
-  @native_second System.convert_time_unit(1, :second, :native)
-  @time_limit 120 * @native_second
 
   @impl true
   def handle_info(:game_loop, state) do

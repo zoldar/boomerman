@@ -576,8 +576,12 @@
                     position: new Point(p.position.x, p.position.y)
                   }
                 });
+              let powerups = message.powerups.map(p => {
+                return new Powerup(p.powerup, new Point(p.x, p.y).multiply(TILE_SIZE))
+              });
+              let gameTimeMs = message.game_time_ms;
 
-              game = loadGame(message.map, playerPostion, otherPlayers, socket);
+              game = loadGame(message.map, playerPostion, otherPlayers, socket, gameTimeMs, powerups);
 
               startGame(game);
             } else if (!game.loading && message.action == 'player_joined') {
@@ -699,10 +703,12 @@
       }
     }
 
-    function loadGame(map, playerPosition, otherPlayers, socket) {
+    function loadGame(map, playerPosition, otherPlayers, socket, gameTimeMs, existingPowerups) {
       let walls = new HashSet();
       let crates = new HashSet();
       let enemies = new HashSet();
+      let powerups = new HashSet(existingPowerups || []);
+      gameTimeMs = gameTimeMs || 0;
 
       if (otherPlayers) {
         otherPlayers.forEach(otherPlayer => {
@@ -733,9 +739,9 @@
         enemies: enemies,
         bombs: new HashSet(),
         blasts: new HashSet(),
-        powerups: new HashSet(),
+        powerups: powerups,
         startedAt: null,
-        timeLimitSeconds: 120
+        timeLimitSeconds: Math.round((120 * 1000 - gameTimeMs) / 1000)
       }
     }
 
@@ -1042,7 +1048,7 @@
     }
 
     function updatePlayerInteractions(game) {
-      let { player, enemies, powerups} = game;
+      let { player, enemies, powerups } = game;
 
       if (!game.socket && detectCollisions(player, [enemies], 'hitBox').length > 0) {
         game.state = 'lost';
