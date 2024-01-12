@@ -29,7 +29,7 @@ defmodule Boomerman.Game do
             point = {x, y}
 
             walls =
-              if field in ["%", "#"] do
+              if field in ["%", "#", "@", "O", "[", "]", "{", "}"] do
                 MapSet.put(map.walls, point)
               else
                 map.walls
@@ -229,10 +229,13 @@ defmodule Boomerman.Game do
             end
           )
 
+        active_players =
+          state.players
+          |> Map.values()
+          |> Enum.filter(&(&1.state == :active))
+
         {:reply,
-         {:ok,
-          {state.map.definition, game_time_ms, slot, Map.values(state.players), state.powerups,
-           bombs}},
+         {:ok, {state.map.definition, game_time_ms, slot, active_players, state.powerups, bombs}},
          %{state | free_slots: slots, players: Map.put(state.players, pid, Player.new(pid, slot))}}
 
       [] ->
@@ -242,15 +245,19 @@ defmodule Boomerman.Game do
 
   def handle_call({:update_player, props}, {pid, _}, state) do
     if player = state.players[pid] do
-      new_player = %{
-        player
-        | direction: props[:direction],
-          velocity: props[:velocity],
-          position: props[:position],
-          updated_at: System.monotonic_time()
-      }
+      if player.state == :active do
+        new_player = %{
+          player
+          | direction: props[:direction],
+            velocity: props[:velocity],
+            position: props[:position],
+            updated_at: System.monotonic_time()
+        }
 
-      {:reply, {:ok, player.slot}, %{state | players: Map.put(state.players, pid, new_player)}}
+        {:reply, {:ok, player.slot}, %{state | players: Map.put(state.players, pid, new_player)}}
+      else
+        state
+      end
     else
       {:reply, {:error, :no_player}, state}
     end
@@ -258,40 +265,48 @@ defmodule Boomerman.Game do
 
   def handle_call({:drop_bomb, {x, y}, blast_radius}, {pid, _}, state) do
     if player = state.players[pid] do
-      state =
-        if not Map.has_key?(state.bombs, {x, y}) do
-          bomb = %Bomb{
-            owner: pid,
-            planted_at: System.monotonic_time(),
-            blast_radius: blast_radius
-          }
+      if player.state == :active do
+        state =
+          if not Map.has_key?(state.bombs, {x, y}) do
+            bomb = %Bomb{
+              owner: pid,
+              planted_at: System.monotonic_time(),
+              blast_radius: blast_radius
+            }
 
-          broadcast({:bomb_dropped, {x, y}, blast_radius, player.slot}, pid)
-          %{state | bombs: Map.put(state.bombs, {x, y}, bomb)}
-        else
-          state
-        end
+            broadcast({:bomb_dropped, {x, y}, blast_radius, player.slot}, pid)
+            %{state | bombs: Map.put(state.bombs, {x, y}, bomb)}
+          else
+            state
+          end
 
-      {:reply, :ok, state}
+        {:reply, :ok, state}
+      else
+        {:reply, :ok, state}
+      end
     else
       {:reply, {:error, :no_player}, state}
     end
   end
 
   def handle_call({:collect_powerup, position}, {pid, _}, state) do
-    if state.players[pid] do
-      if powerup = state.powerups[position] do
-        final_powerup =
-          if powerup == :surprise do
-            Enum.random([:clear, :bomb, :blast, :speed])
-          else
-            powerup
-          end
+    if player = state.players[pid] do
+      if player.state == :active do
+        if powerup = state.powerups[position] do
+          final_powerup =
+            if powerup == :surprise do
+              Enum.random([:clear, :bomb, :blast, :speed])
+            else
+              powerup
+            end
 
-        send(pid, {:powerup_collected, final_powerup, position})
-        broadcast({:powerup_grabbed, position}, pid)
+          send(pid, {:powerup_collected, final_powerup, position})
+          broadcast({:powerup_grabbed, position}, pid)
 
-        {:reply, :ok, %{state | powerups: Map.delete(state.powerups, position)}}
+          {:reply, :ok, %{state | powerups: Map.delete(state.powerups, position)}}
+        else
+          {:reply, :ok, state}
+        end
       else
         {:reply, :ok, state}
       end
@@ -325,8 +340,7 @@ defmodule Boomerman.Game do
         Enum.split_with(state.players, fn {_, player} -> player.state == :active end)
 
       player_boxes =
-        state.players
-        |> Enum.filter(fn {_, player} -> player.state == :active end)
+        active_players
         |> Enum.map(fn {_, player} -> Player.bounding_box(player) end)
 
       bomb_boxes = Enum.map(state.bombs, fn {position, _} -> small_box(position) end)
@@ -348,7 +362,8 @@ defmodule Boomerman.Game do
 
           case collisions(Player.bounding_box(new_player), player_boxes ++ static_boxes) do
             [_ | _] ->
-              state
+              new_player = %{new_player | position: player.position}
+              %{state | players: Map.put(state.players, pid, new_player)}
 
             [] ->
               %{state | players: Map.put(state.players, pid, new_player)}
@@ -537,13 +552,13 @@ defmodule Boomerman.Game do
       position: {px * @tile_size, py * @tile_size},
       width: @tile_size,
       height: @tile_size,
-      key: :none
+      key: {:f, px, py}
     }
   end
 
   defp small_box({px, py}) do
     %{
-      key: :none,
+      key: {:s, px, py},
       position: {px * @tile_size + @tile_size / 3, py * @tile_size + @tile_size / 3},
       width: @tile_size / 3,
       height: @tile_size / 3
