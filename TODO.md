@@ -6,7 +6,7 @@
 * [x] set time limit constraint on a single match
 * [x] ability to restart single player game with a button
 * [x] fix bomb collision handling in multiplayer
-* [ ] sync bomb state on join in multiplayer
+* [x] sync bomb state on join in multiplayer
 * [ ] respawns + frag count
 * [ ] respawning crates
 * [ ] leaderboard
