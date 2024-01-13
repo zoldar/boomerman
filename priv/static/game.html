@@ -682,9 +682,7 @@
           }
         });
       } else {
-        let maps = JSON.parse(localStorage.getItem('boomerman_maps') || "{}")
-        let mapName = window.location.search.substring(1) || 'single';
-        let map = maps[mapName] || map0;
+        let map = loadMap();
         game = loadGame(map);
 
         startGame(game);
@@ -713,6 +711,12 @@
       if (requestAnimationFrameId) {
         cancelAnimationFrame(requestAnimationFrameId);
       }
+    }
+
+    function loadMap() {
+      let maps = JSON.parse(localStorage.getItem('boomerman_maps') || "{}")
+      let mapName = window.location.search.substring(1) || 'single';
+      return maps[mapName] || map0;
     }
 
     function loadGame(map, playerPosition, otherPlayers, socket, gameTimeMs, existingPowerups, existingBombs) {
@@ -1638,7 +1642,8 @@
 
     function restartGame(game) {
       stopGame(game);
-      resetGame(game, map0);
+      let map = loadMap();
+      resetGame(game, map);
       startGame(game, true);
     }
 
