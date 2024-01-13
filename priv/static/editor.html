@@ -383,10 +383,6 @@
 
           if (tileX > -1 && tileY > -1) {
             if (selected && !keys['Meta']) {
-              drawTile(uiContext, selected, tileX, tileY);
-            }
-
-            if (selected && !keys['Meta']) {
               putSelectedTile(tileX, tileY);
             } else if (keys['Meta']) {
               clearCurrentTile(tileX, tileY);
@@ -470,11 +466,11 @@
     }
 
     function getTilePosition(x, y) {
-      let tileX = Math.floor((mouseX - MAP_X) / TILE_SIZE);
-      let tileY = Math.floor((mouseY - MAP_Y) / TILE_SIZE);
+      let tileX = Math.floor((x - MAP_X) / TILE_SIZE);
+      let tileY = Math.floor((y - MAP_Y) / TILE_SIZE);
 
-      if (tileX < 0 || tileX >= MAP_WIDTH) tileX = -1;
-      if (tileY < 0 || tileY >= MAP_HEIGHT) tileY = -1;
+      if (x == 0 || tileX >= MAP_WIDTH) tileX = -1;
+      if (x == 0 || tileY >= MAP_HEIGHT) tileY = -1;
 
       return [tileX, tileY];
     }
@@ -558,10 +554,12 @@
       });
 
       window.addEventListener('blur', e => {
+        clearMap(uiContext);
         keys = {};
       });
 
       window.addEventListener('unload', e => {
+        clearMap(uiContext);
         keys = {};
       });
 
