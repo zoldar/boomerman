@@ -84,6 +84,8 @@
     <a href="?multi">MULTIPLAYER</a>
     |
     <a href="?single">SINGLE PLAYER</a>
+    |
+    <a href="editor.html">EDITOR</a>
   </div>
 
   <script>
@@ -680,7 +682,10 @@
           }
         });
       } else {
-        game = loadGame(map0);
+        let maps = JSON.parse(localStorage.getItem('boomerman_maps') || "{}")
+        let mapName = window.location.search.substring(1) || 'single';
+        let map = maps[mapName] || map0;
+        game = loadGame(map);
 
         startGame(game);
       }

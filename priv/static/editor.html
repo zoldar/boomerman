@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+
+  <title>Bomberman</title>
+  <meta name="description" content="A very simple Bomberman clone">
+  <meta name="author" content="Adrian Gruntkowski">
+  <style type="text/css">
+    @font-face {
+      font-family: pixeloid;
+      src: url('fonts/pixeloidmono.ttf');
+    }
+
+    html,
+    body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background-color: black;
+    }
+
+    .sheet {
+      display: none;
+    }
+
+    #stage {
+      width: 100%;
+      border: 1px solid lightgrey;
+    }
+
+    canvas {
+      width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+      position: absolute;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+
+    #ui-layer {
+      z-index: 3;
+    }
+
+    #entity-layer {
+      z-index: 2;
+    }
+
+    #map-layer {
+      z-index: 1;
+      background: url('images/editor_background.png') no-repeat center;
+      background-size: auto 100%;
+    }
+
+    #menu {
+      font-family: pixeloid, courier new, mono;
+      font-size: x-large;
+      position: fixed;
+      bottom: 0.2rem;
+      right: 0.2rem;
+      z-index: 4;
+      color: white;
+    }
+
+    #menu a {
+      color: white;
+    }
+  </style>
+</head>
+
+<body>
+  <img alt="Letter Spritesheet" class="sheet" id="letter-sheet" src="images/sharp-retro.png">
+  <img alt="City Spritesheet" class="sheet" id="city-sheet" src="images/city.png">
+  <img alt="Bombermen Spritesheet" class="sheet" , id="bombermen-sheet" src="images/bombermen.png">
+  <img alt="Enemies Spritesheet" class="sheet" id="enemies-sheet" src="images/enemies.png">
+
+  <div id="stage">
+    <canvas id="ui-layer" width="320" height="240"></canvas>
+    <canvas id="entity-layer" width="320" height="240"></canvas>
+    <canvas id="map-layer" width="320" height="240"></canvas>
+  </div>
+  <div id="menu">
+    <a href="game.html?multi">MULTIPLAYER</a>
+    |
+    <a href="game.html?single">SINGLE PLAYER</a>
+    |
+    <a href="editor.html">EDITOR</a>
+  </div>
+
+  <script>
+    "use strict";
+
+    class Tile {
+      name;
+      key;
+      sheet;
+      x;
+      y;
+
+      constructor(name, { key, sheet }) {
+        this.name = name;
+        this.key = key;
+        this.sheet = sheet;
+      }
+
+      makeClone(cls, x, y) {
+        let clone = new cls(this.name, { key: this.key, sheet: this.sheet })
+        clone.x = x;
+        clone.y = y;
+
+        return clone;
+      }
+    }
+
+    class MapTile extends Tile {
+      clone(x, y) { return this.makeClone(MapTile, x, y); }
+    }
+    class EntityTile extends Tile {
+      clone(x, y) { return this.makeClone(EntityTile, x, y); }
+    }
+
+    class MapStore {
+      maps = {};
+      storeName;
+
+      constructor(storeName) {
+        this.storeName = storeName;
+      }
+
+      readStorage() {
+        this.maps = JSON.parse(localStorage.getItem(this.storeName + '_maps') || "{}")
+      }
+
+      saveStorage() {
+        localStorage.setItem(this.storeName + '_maps', JSON.stringify(this.maps))
+      }
+    }
+
+    class GameMap {
+      store;
+      tilesByKey;
+      currentMap;
+      mapTiles = new Map();
+      entityTiles = new Map();
+
+      constructor(store, tilesByKey) {
+        this.store = store;
+        this.tilesByKey = tilesByKey;
+        store.readStorage();
+      }
+
+      load(name) {
+        this.currentMap = currentMap;
+        this.deserialize(this.store.maps[name] || []);
+      }
+
+      save() {
+        this.store.maps[currentMap] = this.serialize();
+        this.store.saveStorage();
+      }
+
+      put(tileX, tileY, tile, skipSave) {
+        if (tile instanceof MapTile) {
+          this.mapTiles.set(this.hash(tileX, tileY), tile.clone(tileX, tileY));
+        } else if (tile instanceof EntityTile) {
+          this.entityTiles.set(this.hash(tileX, tileY), tile.clone(tileX, tileY));
+        } else {
+          throw new Error('Unknown tile type');
+        }
+
+        if (!skipSave) {
+          this.save();
+        }
+      }
+
+      getFromMap(tileX, tileY) {
+        let hash = this.hash(tileX, tileY);
+        return this.mapTiles.get(hash);
+      }
+
+      getEntity(tileX, tileY) {
+        let hash = this.hash(tileX, tileY);
+        return this.entityTiles.get(hash);
+      }
+
+      deleteOnMap(tileX, tileY) {
+        this.mapTiles.delete(this.hash(tileX, tileY));
+
+        this.save();
+      }
+
+      deleteEntity(tileX, tileY) {
+        this.entityTiles.delete(this.hash(tileX, tileY));
+
+        this.save();
+      }
+
+      serialize() {
+        let map = [];
+        for (let tileY = 0; tileY <= MAP_HEIGHT; tileY++) {
+          let row = [];
+          for (let tileX = 0; tileX <= MAP_WIDTH; tileX++) {
+            let entityTile = this.getEntity(tileX, tileY);
+            let mapTile = this.getFromMap(tileX, tileY);
+
+            if (entityTile) {
+              row.push(entityTile.key);
+            } else if (mapTile) {
+              row.push(mapTile.key);
+            } else {
+              row.push(' ');
+            }
+          }
+          map.push(row.join(''));
+        }
+        return map;
+      }
+
+      deserialize(mapArr) {
+        this.mapTiles = new Map();
+        this.entityTiles = new Map();
+
+        let grassTile = this.tilesByKey.get('G');
+
+        mapArr.forEach((row, tileY) => {
+          row.split('').forEach((tileKey, tileX) => {
+            let tile = this.tilesByKey.get(tileKey);
+
+            if (tile instanceof EntityTile) {
+              this.put(tileX, tileY, grassTile, true);
+              this.put(tileX, tileY, tile, true);
+            } else if (tile instanceof MapTile) {
+              this.put(tileX, tileY, tile, true);
+            }
+          });
+        });
+      }
+
+      hash(tileX, tileY) {
+        return `${tileX}#${tileY}`
+      }
+    }
+
+    const TILE_SIZE = 16;
+    const PALETTE_X = 16;
+    const PALETTE_Y = 4;
+    const PALETTE_COLS = 18;
+    const PALETTE_ROWS = 2;
+    const MAP_X = 0;
+    const MAP_Y = 40;
+    const MAP_WIDTH = 20;
+    const MAP_HEIGHT = 11;
+
+    const mapSheet = {
+      height: 16,
+      sheet: document.getElementById('city-sheet'),
+      '[': [0, 1],
+      ']': [0, 8],
+      '{': [2, 1],
+      '}': [2, 7],
+      '@': [1, 1],
+      'O': [2, 8],
+      '%': [0, 3],
+      '#': [2, 2],
+      'G': [2, 3],
+      'S': [1, 3],
+      'C': [0, 4]
+    };
+
+    const enemySheet = {
+      height: 25,
+      sheet: document.getElementById('enemies-sheet'),
+      'E': [1, 1],
+    };
+
+    const bombermanSheet = {
+      height: 25,
+      sheet: document.getElementById('bombermen-sheet'),
+      'P': [1, 4]
+    };
+
+    const sheets = {
+      'map': mapSheet,
+      'bombermen': bombermanSheet,
+      'enemies': enemySheet
+    };
+
+    const palette = [
+      new MapTile('grass', { key: 'G', sheet: 'map' }),
+      new MapTile('shadow_grass', { key: 'S', sheet: 'map' }),
+      new MapTile('top_wall', { key: '%', sheet: 'map' }),
+      new MapTile('bottom_wall', { key: '#', sheet: 'map' }),
+      new MapTile('left_wall', { key: '@', sheet: 'map' }),
+      new MapTile('right_wall', { key: 'O', sheet: 'map' }),
+      new MapTile('corner_wall_tl', { key: '[', sheet: 'map' }),
+      new MapTile('corner_wall_tr', { key: ']', sheet: 'map' }),
+      new MapTile('corner_wall_bl', { key: '{', sheet: 'map' }),
+      new MapTile('corner_wall_br', { key: '}', sheet: 'map' }),
+      new MapTile('crate', { key: 'C', sheet: 'map' }),
+      new EntityTile('player', { key: 'P', sheet: 'bombermen' }),
+      new EntityTile('enemy1', { key: 'E', sheet: 'enemies' })
+    ];
+
+    const tilesByKey = new Map(palette.map(tile => [tile.key, tile]));
+
+    // global state
+    let uiCanvas;
+    let uiContext;
+    let entityCanvas;
+    let entityContext;
+    let mapCanvas;
+    let mapContext;
+    let keys = {};
+    let mouseX = 0;
+    let mouseY = 0;
+    let mouseButton = false;
+    let clickHandlers = new Map();
+    let mouseMoveHandlers = new Map();
+    let keyHandlers = new Map();
+    let keyUpEvent;
+    let currentMap = location.search.substring(1) || 'example1';
+    let gameMap = new GameMap(new MapStore('boomerman'), tilesByKey);
+    let selected;
+
+    window.onload = init;
+
+    function init() {
+      // Get a reference to the canvas
+      uiCanvas = document.getElementById('ui-layer');
+      uiContext = uiCanvas.getContext('2d');
+      entityCanvas = document.getElementById('entity-layer');
+      entityContext = entityCanvas.getContext('2d');
+      mapCanvas = document.getElementById('map-layer');
+      mapContext = mapCanvas.getContext('2d');
+
+      setupControls();
+
+      keyHandlers.set('Escape', {
+        callback: () => {
+          clearPaletteSelection();
+        }
+      });
+
+      drawPalette();
+      setupMapArea();
+      loadMap();
+    }
+
+    function loadMap() {
+      gameMap.load(currentMap);
+      drawMap();
+    }
+
+    function setupMapArea() {
+      mouseMoveHandlers.set('map_over', () => {
+        clearMap(uiContext);
+
+        let [tileX, tileY] = getTilePosition(mouseX, mouseY);
+
+        if (tileX > -1 && tileY > -1) {
+          if (selected && !keys['Meta']) {
+            drawTile(uiContext, selected, tileX, tileY);
+          }
+
+          if (selected && mouseButton && !keys['Meta']) {
+            putSelectedTile(tileX, tileY);
+          } else if (mouseButton && keys['Meta']) {
+            clearCurrentTile(tileX, tileY);
+          }
+        }
+      });
+
+      clickHandlers.set('map_click', {
+        box: {
+          x: MAP_X,
+          y: MAP_Y,
+          width: MAP_WIDTH * TILE_SIZE,
+          height: MAP_HEIGHT * TILE_SIZE
+        },
+        callback: () => {
+          let [tileX, tileY] = getTilePosition(mouseX, mouseY);
+
+          if (tileX > -1 && tileY > -1) {
+            if (selected && !keys['Meta']) {
+              drawTile(uiContext, selected, tileX, tileY);
+            }
+
+            if (selected && !keys['Meta']) {
+              putSelectedTile(tileX, tileY);
+            } else if (keys['Meta']) {
+              clearCurrentTile(tileX, tileY);
+            }
+          }
+        }
+      });
+    };
+
+    function clearMap(context) {
+      context.clearRect(
+        MAP_X, MAP_Y, MAP_WIDTH * TILE_SIZE, MAP_HEIGHT * TILE_SIZE
+      );
+    }
+
+    function putSelectedTile(tileX, tileY) {
+      gameMap.put(tileX, tileY, selected);
+      drawMap();
+    }
+
+    function clearCurrentTile(tileX, tileY) {
+      if (gameMap.getEntity(tileX, tileY)) {
+        gameMap.deleteEntity(tileX, tileY);
+      } else if (gameMap.getFromMap(tileX, tileY)) {
+        gameMap.deleteOnMap(tileX, tileY);
+      }
+
+      drawMap();
+    }
+
+    function drawMap() {
+      clearMap(mapContext);
+      clearMap(entityContext);
+
+      for (let tileX = 0; tileX <= MAP_WIDTH; tileX++) {
+        for (let tileY = 0; tileY <= MAP_HEIGHT; tileY++) {
+          let mapTile = gameMap.getFromMap(tileX, tileY);
+          let entityTile = gameMap.getEntity(tileX, tileY);
+
+          if (mapTile) drawTile(mapContext, mapTile, tileX, tileY);
+          if (entityTile) drawTile(entityContext, entityTile, tileX, tileY);
+        }
+      }
+    }
+
+    function getContext(tile) {
+      if (tile instanceof MapTile) {
+        return mapContext;
+      } else if (tile instanceof EntityTile) {
+        return entityContext;
+      } else {
+        throw new Error('Unknown tile type');
+      }
+    }
+
+    function drawTile(context, tile, tileX, tileY) {
+      if (tileX > -1 && tileY > -1) {
+        // cropping tall sprites at the top of the map area
+        let crop = tileY == 0 && sheets[tile.sheet].height > TILE_SIZE;
+        let x = MAP_X + tileX * TILE_SIZE;
+        let y = MAP_Y + tileY * TILE_SIZE;
+
+        drawSprite(
+          context,
+          tile.sheet,
+          x,
+          y,
+          tile.key,
+          { crop }
+        );
+      }
+    }
+
+    function getPixelPosition(tileX, tileY) {
+      let x = -1, y = -1;
+
+      if (tileX > -1) x = MAP_X + tileX * TILE_SIZE;
+      if (tileY > -1) y = MAP_Y + tileY * TILE_SIZE;
+
+      return [x, y];
+    }
+
+    function getTilePosition(x, y) {
+      let tileX = Math.floor((mouseX - MAP_X) / TILE_SIZE);
+      let tileY = Math.floor((mouseY - MAP_Y) / TILE_SIZE);
+
+      if (tileX < 0 || tileX >= MAP_WIDTH) tileX = -1;
+      if (tileY < 0 || tileY >= MAP_HEIGHT) tileY = -1;
+
+      return [tileX, tileY];
+    }
+
+    function drawPalette() {
+      palette.forEach((tile, idx) => {
+        let column = idx % PALETTE_COLS;
+        let row = Math.floor(idx / PALETTE_COLS);
+        let x = PALETTE_X + column * TILE_SIZE;
+        let y = PALETTE_Y + row * TILE_SIZE;
+        tile.x = x;
+        tile.y = y;
+
+        drawSprite(uiContext, tile.sheet, x, y, tile.key);
+
+        clickHandlers.set(`palette_${tile.name}`, {
+          box: { x: x, y: y, width: TILE_SIZE, height: TILE_SIZE },
+          callback: () => {
+            selectPaletteTile(tile);
+          }
+        });
+      });
+    }
+
+    function selectPaletteTile(tile) {
+      clearPaletteSelection();
+
+      uiContext.lineWidth = 1;
+      uiContext.strokeStyle = 'white';
+      uiContext.strokeRect(
+        tile.x + 1, tile.y + 1, TILE_SIZE - 1, TILE_SIZE - 1
+      );
+
+      selected = tile.clone(tile.x, tile.y);
+    }
+
+    function clearPaletteSelection() {
+      if (selected) {
+        // clear existing selection
+        clearSprite(
+          uiContext,
+          selected.sheet,
+          selected.x,
+          selected.y,
+        );
+
+        drawSprite(
+          uiContext,
+          selected.sheet,
+          selected.x,
+          selected.y,
+          selected.key
+        );
+
+        selected = null;
+      }
+    }
+
+    function setupControls() {
+      let linkClicked = false;
+      let touchStartX = -1;
+      let touchStartY = -1;
+
+      window.addEventListener('keydown', e => {
+        // disable key repeating
+        if (keys[e.key]) return;
+
+        let key = keyHandlers.has(e.key) ? e.key : 'any';
+        keyUpEvent = keyHandlers.get(key)
+
+        keys[e.key] = true;
+      });
+
+      window.addEventListener('keyup', e => {
+        if (keyUpEvent) {
+          keyUpEvent.callback();
+          keyUpEvent = null;
+        }
+
+        keys[e.key] = false;
+      });
+
+      window.addEventListener('blur', e => {
+        keys = {};
+      });
+
+      window.addEventListener('unload', e => {
+        keys = {};
+      });
+
+      window.addEventListener("touchstart", e => {
+        if (e.touches) {
+          if (e.touches[0].target.href) linkClicked = true;
+          touchStartX = e.touches[0].pageX;
+          touchStartY = e.touches[0].pageY;
+          e.preventDefault();
+        }
+      });
+
+      window.addEventListener("touchend", e => {
+        let [mouseX, mouseY] = translateToCanvasPosition(touchStartX, touchStartY);
+        let handlerHit = false;
+
+        clickHandlers.forEach(({ box, callback }, key) => {
+          if (mouseX >= box.x && mouseX < box.x + box.width &&
+            mouseY >= box.y && mouseY < box.y + box.height) {
+            handlerHit = true;
+            callback();
+          }
+        });
+
+        if (linkClicked) {
+          linkClicked = false;
+        } else {
+          e.preventDefault();
+        }
+      });
+
+      window.addEventListener("touchmove", e => {
+        if (e.touches) {
+          let touchX = e.touches[0].pageX;
+          let touchY = e.touches[0].pageY;
+
+          e.preventDefault();
+        }
+      });
+
+      window.addEventListener("mousemove", e => {
+        let [cx, cy] = translateToCanvasPosition(e.clientX, e.clientY);
+
+        mouseX = cx;
+        mouseY = cy;
+
+        mouseMoveHandlers.forEach(callback => { callback(); });
+      });
+
+
+      window.addEventListener("mousedown", e => {
+        mouseButton = true;
+      });
+
+      window.addEventListener("mouseup", e => {
+        mouseButton = false;
+      });
+
+      window.addEventListener('click', e => {
+        clickHandlers.forEach(({ box, callback }, key) => {
+          if (mouseX >= box.x && mouseX < box.x + box.width &&
+            mouseY >= box.y && mouseY < box.y + box.height) {
+            callback();
+          }
+        });
+      });
+    }
+
+    function translateToCanvasPosition(x, y) {
+      let cx, cy;
+      let canvasRatio = mapCanvas.width / mapCanvas.height;
+      let fullWidth = mapCanvas.scrollWidth;
+      let realHeight = mapCanvas.scrollHeight;
+      let realWidth = realHeight * canvasRatio;
+      let xOffset = (fullWidth - realWidth) / 2;
+
+      let relativeX = x - (mapCanvas.offsetLeft + xOffset);
+      if (relativeX <= 0) {
+        cx = 0;
+      } else if (relativeX > 0 && relativeX < realWidth) {
+        cx = Math.round((relativeX / realWidth) * mapCanvas.width);
+      } else {
+        cx = mapCanvas.width;
+      }
+
+      let relativeY = y - mapCanvas.offsetTop;
+      if (relativeY <= 0) {
+        cy = 0;
+      } if (relativeY > 0 && relativeY < realHeight) {
+        cy = Math.round((relativeY / realHeight) * mapCanvas.height);
+      } else {
+        cy = mapCanvas.height;
+      }
+
+      return [cx, cy];
+    }
+
+    function drawSprite(context, sheetName, x, y, sprite, opts) {
+      let sprites = sheets[sheetName];
+      let [row, column] = sprites[sprite];
+      let crop = opts && opts.crop;
+
+      let verticalOffset = sprites.height - TILE_SIZE;
+
+      context.drawImage(
+        sprites.sheet,
+        column * TILE_SIZE,
+        crop ? row * (TILE_SIZE + verticalOffset) + verticalOffset : row * (TILE_SIZE + verticalOffset),
+        TILE_SIZE,
+        crop ? TILE_SIZE : (TILE_SIZE + verticalOffset),
+        x,
+        crop ? y : y - verticalOffset,
+        TILE_SIZE,
+        crop ? TILE_SIZE : (TILE_SIZE + verticalOffset)
+      );
+    }
+
+    function clearSprite(context, sheetName, x, y) {
+      let sprites = sheets[sheetName];
+      let verticalOffset = sprites.height - TILE_SIZE;
+
+      context.clearRect(
+        x,
+        y - verticalOffset,
+        TILE_SIZE,
+        TILE_SIZE + verticalOffset
+      );
+    }
+  </script
+</body>
+
+</html>
